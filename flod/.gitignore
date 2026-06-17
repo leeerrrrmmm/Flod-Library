@@ -1,0 +1,29 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Dart/Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+bin/
+gen/
+
+# Generated files (если используете build_runner)
+*.g.dart
+*.freezed.dart
+*.injectable.dart
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project local configuration
+pubspec.lock
+.env
