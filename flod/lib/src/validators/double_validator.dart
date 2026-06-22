@@ -1,11 +1,13 @@
+import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/error.dart';
 import 'package:flod/src/res/validation_result.dart';
 import 'package:flod/src/rules/numbers/base_number_rule.dart';
 import 'package:flod/src/types/path.dart';
 import 'package:flod/src/validators/base_number_validator.dart';
 
-class DoubleValidator extends BaseNumberValidator<double> {
-  const DoubleValidator([super.rules]);
+class DoubleValidator extends BaseNumberValidator<double>
+    with Transformable<double> {
+  DoubleValidator([super.rules]);
 
   @override
   DoubleValidator copyWith(List<BaseNumberRule<double>> newRules) {
@@ -14,11 +16,13 @@ class DoubleValidator extends BaseNumberValidator<double> {
 
   @override
   ValidationResult<double> validate(dynamic value, {Path path = const []}) {
-    if (value is! double) {
+    final dynamic transformed = applyTransforms(value);
+
+    if (transformed is! double) {
       return FlodFailure([FlodError(path, 'Expected double', 'invalid_type')]);
     }
 
-    if (!value.isFinite) {
+    if (!transformed.isFinite) {
       return FlodFailure([
         FlodError(path, 'Value must be finite and not NaN', 'invalid_number'),
       ]);
@@ -27,11 +31,11 @@ class DoubleValidator extends BaseNumberValidator<double> {
     final errors = <FlodError>[];
 
     for (final rule in rules) {
-      if (!rule.check(value)) {
+      if (!rule.check(transformed)) {
         errors.add(FlodError(path, rule.message, rule.code));
       }
     }
 
-    return errors.isEmpty ? FlodSuccess(value) : FlodFailure(errors);
+    return errors.isEmpty ? FlodSuccess(transformed) : FlodFailure(errors);
   }
 }

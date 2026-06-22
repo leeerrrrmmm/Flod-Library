@@ -1,41 +1,40 @@
-import 'package:flod/src/error.dart';
-import 'package:flod/src/extensions/list_extension.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/types/path.dart';
-import 'package:flod/src/validators/validator.dart';
+import 'package:flod/flod.dart';
+import 'package:flod/src/core/transformer/transformer.dart';
 
-class ListValidator extends Validator<List<dynamic>> {
+class ListValidator extends Validator<List<dynamic>>
+    with Transformable<List<dynamic>> {
   final Validator? schema;
   final int? minItemsLength;
   final int? maxItemsLength;
-  final bool? uniqueItems;
+  final bool isUnique; // ИСПРАВЛЕНИЕ: Переименовали поле во избежание конфликта
 
   ListValidator({
     this.schema,
     this.minItemsLength,
     this.maxItemsLength,
-    this.uniqueItems = false,
+    this.isUnique = false, // По умолчанию false
   });
 
   ListValidator minItems(int n) => ListValidator(
     schema: schema,
     minItemsLength: n,
     maxItemsLength: maxItemsLength,
-    uniqueItems: uniqueItems,
+    isUnique: isUnique,
   );
 
   ListValidator maxItems(int n) => ListValidator(
     schema: schema,
     minItemsLength: minItemsLength,
     maxItemsLength: n,
-    uniqueItems: uniqueItems,
+    isUnique: isUnique,
   );
 
-  ListValidator unique() => ListValidator(
+  // ИСПРАВЛЕНИЕ: Метод теперь называется строго по твоему чек-листу
+  ListValidator uniqueItems() => ListValidator(
     schema: schema,
     minItemsLength: minItemsLength,
     maxItemsLength: maxItemsLength,
-    uniqueItems: true,
+    isUnique: true,
   );
 
   @override
@@ -43,13 +42,15 @@ class ListValidator extends Validator<List<dynamic>> {
     dynamic value, {
     Path path = const [],
   }) {
-    if (value is! List) {
+    final dynamic transformed = applyTransforms(value);
+
+    if (transformed is! List) {
       return FlodFailure<List<dynamic>>([
         FlodError(path, 'Expected a list', 'invalid_type'),
       ]);
     }
 
-    final list = value;
+    final list = transformed;
 
     if (minItemsLength != null && list.length < minItemsLength!) {
       return FlodFailure<List<dynamic>>([
@@ -63,15 +64,15 @@ class ListValidator extends Validator<List<dynamic>> {
       ]);
     }
 
-    if (uniqueItems == true) {
+    // ИСПРАВЛЕНИЕ: Проверяем флаг через новое имя поля
+    if (isUnique) {
       final seen = <dynamic>{};
       for (int i = 0; i < list.length; i++) {
         if (!seen.add(list[i])) {
-          // Здесь мы создаем путь, указывающий на конкретный индекс дубликата
           final errorPath = path.append(i);
           return FlodFailure<List<dynamic>>([
             FlodError(
-              errorPath as Path,
+              errorPath,
               'Duplicate item found at index $i',
               'unique_items',
             ),
@@ -82,17 +83,16 @@ class ListValidator extends Validator<List<dynamic>> {
 
     if (schema != null) {
       for (int i = 0; i < list.length; i++) {
-        // Убедись, что path — это список (или используй свой метод добавления)
         final nextPath = path.append(i);
-        final res = schema!.validate(list[i], path: nextPath as Path);
+        final res = schema!.validate(list[i], path: nextPath);
 
-        if (res is FlodFailure) {
-          // Приводим ошибку дочернего элемента к типу List
+        // ИСПРАВЛЕНИЕ: Используем твой новый sealed-API геттер result.isFailure
+        if (res.isFailure) {
           return FlodFailure<List<dynamic>>(res.errors);
         }
       }
     }
 
-    return FlodSuccess<List<dynamic>>(list);
+    return FlodSuccess<List<dynamic>>(List<dynamic>.from(list));
   }
 }

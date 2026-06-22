@@ -1,5 +1,4 @@
-import 'package:flod/src/error.dart';
-import 'package:flod/src/types/path.dart';
+import 'package:flod/flod.dart';
 
 class ValidationException implements Exception {
   final List<FlodError> errors;
