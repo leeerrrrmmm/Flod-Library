@@ -1,5 +1,5 @@
 /// Type alias for a path.
-typedef Path = List<String>;
+typedef Path = List<dynamic>;
 
 /// Extension method to convert a path to a readable string.
 extension PathX on Path {
