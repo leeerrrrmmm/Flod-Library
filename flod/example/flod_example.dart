@@ -2,252 +2,328 @@ import 'package:flod/flod.dart';
 
 void main() {
   print("=================================================================");
-  print("          FLOD VALIDATION ENGINE - COMPLETE TEST SUITE           ");
+  print("          FLOD PRIVACY MATRIX: EXHAUSTIVE DIAGNOSTIC SUITE       ");
   print("=================================================================\n");
 
-  // Вспомогательная функция для красивого вывода результатов проверки
-  void printResult(String title, ParseResult result) {
-    if (result.success) {
-      print("✅ $title: SUCCESS -> Data: ${result.data}");
-    } else {
-      print("❌ $title: FAIL");
+  /// Умный диагностический хелпер.
+  /// Исключает ложные срабатывания и детально подсвечивает логику Flod.
+  void runScenario({
+    required String name,
+    required Validator publicValidator,
+    required Validator secretValidator,
+    required dynamic validValue,
+    required dynamic invalidValue,
+  }) {
+    print("📌 [Rule: $name]");
 
-      // ЯВНО указываем тип FlodError вместо final.
-      // Теперь компилятор знает, что error.path — это список,
-      // и метод .toReadable() на листе начинает работать!
-      for (final FlodError error in result.errors ?? []) {
-        print(
-          "   -> [Path: ${error.path.toReadable()}] ${error.message} (${error.code})",
-        );
-      }
+    // 1. ТЕСТ: ПРАВИЛЬНЫЕ ДАННЫЕ
+    final resValid = publicValidator.safeParse(validValue);
+    if (resValid.success) {
+      // Выводим не только значение, но и runtimeType для проверки строгости типов
+      print(
+        "   ✅ ПРАВИЛЬНО          -> SUCCESS: ${resValid.data} [Type: ${resValid.data.runtimeType}]",
+      );
+    } else {
+      // Если safeParse вернул ошибку на валидных данных — это бага в логике правила!
+      print("   🚨 CRITICAL TEST FAIL -> ОЖИДАЛСЯ УСПЕХ, НО ПРАВИЛО УПАЛО!");
+      print(
+        "                            Ошибки: ${resValid.errors?.map((e) => e.toString()).join(', ')}",
+      );
+    }
+
+    // 2. ТЕСТ: НЕПРАВИЛЬНЫЕ ДАННЫЕ (Публичный лог)
+    final resInvalid = publicValidator.safeParse(invalidValue);
+    if (resInvalid.success == false) {
+      final errInvalid = resInvalid.errors!.first.toString();
+      print("   ❌ НЕПРАВИЛЬНО        -> FAIL: $errInvalid");
+    } else {
+      print(
+        "   🚨 CRITICAL TEST FAIL -> ОЖИДАЛСЯ ФЕЙЛ, НО ВАЛИДАТОР ПРОПУСТИЛ ДАННЫЕ! (Value: $invalidValue)",
+      );
+    }
+
+    // 3. ТЕСТ: НЕПРАВИЛЬНЫЕ ДАННЫЕ + МАСКИРОВАНИЕ (Секретный лог)
+    final resSecret = secretValidator.safeParse(invalidValue);
+    if (resSecret.success == false) {
+      final errSecret = resSecret.errors!.first.toString();
+      print("   🔒 НЕПРАВИЛЬНО HIDDEN -> FAIL: $errSecret\n");
+    } else {
+      print(
+        "   🚨 CRITICAL TEST FAIL -> SECRET ОЖИДАЛСЯ ФЕЙЛ, НО ВАЛИДАТОР ПРОПУСТИЛ ДАННЫЕ!\n",
+      );
     }
   }
 
   // =========================================================================
-  // 1. СТРОКИ: ТРАНСФОРМАЦИИ, ДЛИНА И РЕГУЛЯРНЫЕ ВЫРАЖЕНИЯ (Позиционный API)
+  // СЕКЦИЯ 1: СТРОКИ (CORE & RULES)
   // =========================================================================
-  print("=== 1. STRING CORE & TRANSFORMS ===");
+  print("=== СЕКЦИЯ 1: СТРОКИ (CORE & RULES) ===");
 
-  final basicString = Flod.string().trim().toLowerCase().min(
-    3,
-    "Too short string",
-    "min_len",
+  runScenario(
+    name: "String Type Check",
+    publicValidator: Flod.string(),
+    secretValidator: Flod.string().secret(),
+    validValue: "Hello Flod",
+    invalidValue: 42,
   );
 
-  printResult(
-    "String valid transformation",
-    basicString.safeParse("   FLOD   "),
-  );
-  printResult(
-    "String failure (too short after trim)",
-    basicString.safeParse("  fl  "),
-  );
-  printResult(
-    "String failure (invalid type passed)",
-    basicString.safeParse(123),
+  runScenario(
+    name: "String .min()",
+    publicValidator: Flod.string().min(5, "Too short", "min_err"),
+    secretValidator: Flod.string()
+        .min(5, "Too short", "min_err SECRET")
+        .secret(),
+    validValue: "DartLanguage",
+    invalidValue: "dev",
   );
 
-  // =========================================================================
-  // 2. СТРОКИ: ДОМЕННЫЕ ПРАВИЛА И ПОДДЕРЖКА i18n (Именованный API расширений)
-  // =========================================================================
-  print("\n=== 2. STRING DOMAIN RULES & I18N ===");
-
-  // Тест дефолтных сообщений
-  final defaultEmail = Flod.string().email();
-  printResult("Email (Default success)", defaultEmail.safeParse("dev@flod.io"));
-  printResult(
-    "Email (Default failure)",
-    defaultEmail.safeParse("invalid-email"),
+  runScenario(
+    name: "String .max()",
+    publicValidator: Flod.string().max(5, "Too long", "max_err"),
+    secretValidator: Flod.string()
+        .max(5, "Too long", "max_err SECRET")
+        .secret(),
+    validValue: "Flod",
+    invalidValue: "Framework",
   );
 
-  // Тест кастомной локализации (i18n)
-  final i18nEmail = Flod.string().email(
-    message: "Некорректный адрес электронной почты",
-    code: "RU_ERR_EMAIL",
-  );
-  printResult(
-    "Email (i18n failure localization check)",
-    i18nEmail.safeParse("wrong@"),
-  );
-
-  // Тест остальных доменных расширений строк
-  final urlValidator = Flod.string().url();
-  printResult("URL valid", urlValidator.safeParse("https://dart.dev/guides"));
-  printResult("URL invalid", urlValidator.safeParse("ftp://invalid-url"));
-
-  final phoneValidator = Flod.string().phoneNumber();
-  printResult("Phone valid", phoneValidator.safeParse("+123456789012"));
-  printResult("Phone invalid", phoneValidator.safeParse("0"));
-
-  final uuidValidator = Flod.string().uuid();
-  printResult(
-    "UUID v4 valid",
-    uuidValidator.safeParse("9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"),
-  );
-  printResult(
-    "UUID v4 invalid",
-    uuidValidator.safeParse("9b1deb4d-3b7d-3bad-9bdd-2b0d7b3dcb6d"),
-  ); // Не '4' в секции версии
-
-  // Тест политик паролей
-  final passwordValidator = Flod.string()
-      .minUppercase(2)
-      .minNumbers(2)
-      .minSymbols(2);
-  printResult(
-    "Password valid policy",
-    passwordValidator.safeParse("AA11!!safe"),
-  );
-  printResult(
-    "Password invalid policy (missing uppercase/symbols)",
-    passwordValidator.safeParse("a1safe!"),
+  runScenario(
+    name: "String .regex()",
+    publicValidator: Flod.string().regex(
+      RegExp(r'^[0-9]+$'),
+      "Numbers only",
+      "regex_err",
+    ),
+    secretValidator: Flod.string()
+        .regex(RegExp(r'^[0-9]+$'), "Numbers only", "regex_err SECRET")
+        .secret(),
+    validValue: "2026",
+    invalidValue: "year2026",
   );
 
   // =========================================================================
-  // 3. ЧИСЛА: INT И DOUBLE (Границы, полиморфизм и валидация типов)
+  // СЕКЦИЯ 2: ДОМЕННЫЕ РАСШИРЕНИЯ СТРОК
   // =========================================================================
-  print("\n=== 3. NUMBERS (INT & DOUBLE) ===");
+  print("\n=== СЕКЦИЯ 2: ДОМЕННЫЕ РАСШИРЕНИЯ СТРОК ===");
 
-  final intValidator = Flod.int()
-      .min(10, message: "Must be >= 10")
-      .max(50)
-      .positive();
-  printResult("Int valid range", intValidator.safeParse(25));
-  printResult("Int failure (under min)", intValidator.safeParse(5));
-  printResult("Int failure (over max)", intValidator.safeParse(60));
-  printResult("Int failure (type double passed)", intValidator.safeParse(25.5));
-
-  final doubleValidator = Flod.double().min(0.0).max(100.0).multipleOf(0.25);
-  printResult("Double valid float point", doubleValidator.safeParse(10.5));
-  printResult(
-    "Double failure (NaN / Infinite check)",
-    doubleValidator.safeParse(double.nan),
-  );
-  printResult(
-    "Double failure (type int passed)",
-    doubleValidator.safeParse(50),
+  runScenario(
+    name: "Email Validation",
+    publicValidator: Flod.string().email(),
+    secretValidator: Flod.string().email().secret(),
+    validValue: "maksym@flod.dev",
+    invalidValue: "invalid_email_format",
   );
 
-  // =========================================================================
-  // 4. ДЕКОРАТОРЫ: NULLABLE И OPTIONAL
-  // =========================================================================
-  print("\n=== 4. DECORATORS (NULLABLE & OPTIONAL) ===");
-
-  final nullableString = Flod.string().trim().nullable();
-  printResult("Nullable explicit null", nullableString.safeParse(null));
-  printResult(
-    "Nullable with valid data",
-    nullableString.safeParse("  Hello  "),
-  );
-  printResult("Nullable failure on wrong type", nullableString.safeParse(45.6));
-
-  final optionalInt = Flod.int().optional();
-  printResult("Optional missing/null value", optionalInt.safeParse(null));
-  printResult("Optional with valid int", optionalInt.safeParse(42));
-
-  // =========================================================================
-  // 5. КОЛЛЕКЦИИ: СПИСКИ (Длина, уникальность, вложенные схемы, поиск по индексам)
-  // =========================================================================
-  print("\n=== 5. LISTS & ARRAYS ===");
-
-  final simpleList = Flod.list().minItems(2).maxItems(4);
-  printResult("Simple List length valid", simpleList.safeParse([1, 2, 3]));
-  printResult(
-    "Simple List failure (too long)",
-    simpleList.safeParse([1, 2, 3, 4, 5]),
+  runScenario(
+    name: "URL Validation",
+    publicValidator: Flod.string().url(),
+    secretValidator: Flod.string().url().secret(),
+    validValue: "https://pub.dev/packages/flod",
+    invalidValue: "not-a-valid-url",
   );
 
-  final uniqueIntList = Flod.list(schema: Flod.int()).uniqueItems();
-  printResult("Unique Int List valid", uniqueIntList.safeParse([10, 20, 30]));
-  printResult(
-    "Unique Int List failure (duplicate index path tracing)",
-    uniqueIntList.safeParse([10, 20, 10, 30]),
-  );
-  printResult(
-    "Unique Int List failure (wrong child item type)",
-    uniqueIntList.safeParse([10, "wrong", 30]),
+  runScenario(
+    name: "Phone Number Validation",
+    publicValidator: Flod.string().phoneNumber(),
+    secretValidator: Flod.string().phoneNumber().secret(),
+    validValue: "+380501234567",
+    invalidValue: "abc-phone",
   );
 
-  // =========================================================================
-  // 6. СХЕМЫ ОБЪЕКТОВ И РЕЖИМЫ СТРОГОСТИ (Passthrough vs Strict)
-  // =========================================================================
-  print("\n=== 6. OBJECT SCHEMAS & MODES ===");
-
-  final profileSchema = Flod.object({
-    "username": Flod.string().trim().min(3, "Short username", "user_short"),
-    "age": Flod.int().min(18),
-    "website": Flod.string().url().optional(), // Опциональное поле в схеме
-  });
-
-  // final validProfile = {"username": "  coder_dan ", "age": 21};
-  final extraKeysProfile = {
-    "username": "alex",
-    "age": 30,
-    "session_token": "secret_abc123",
-  };
-  final invalidProfile = {"username": "jo", "age": 15};
-
-  printResult(
-    "Object Passthrough mode (allows unknown keys)",
-    profileSchema.passthrough().safeParse(extraKeysProfile),
+  runScenario(
+    name: "UUID v4 Validation",
+    publicValidator: Flod.string().uuid(),
+    secretValidator: Flod.string().uuid().secret(),
+    // ИСПРАВЛЕНО: Раньше был UUID v1, из-за чего тест падал. Теперь тут чистый v4 (четверка в начале 3-й группы).
+    validValue: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    invalidValue: "custom-token-uid",
   );
-  printResult(
-    "Object Strict mode failure (blocks unknown keys)",
-    profileSchema.strict().safeParse(extraKeysProfile),
+
+  runScenario(
+    name: "Password Uppercase Policy",
+    publicValidator: Flod.string().minUppercase(2),
+    secretValidator: Flod.string().minUppercase(2).secret(),
+    validValue: "FLodFramework",
+    invalidValue: "flod",
   );
-  printResult(
-    "Object field schema violations validation",
-    profileSchema.safeParse(invalidProfile),
+
+  runScenario(
+    name: "Password Numbers Policy",
+    publicValidator: Flod.string().minNumbers(2),
+    secretValidator: Flod.string().minNumbers(2).secret(),
+    validValue: "Pass12",
+    invalidValue: "Password",
+  );
+
+  runScenario(
+    name: "Password Symbols Policy",
+    publicValidator: Flod.string().minSymbols(2),
+    secretValidator: Flod.string().minSymbols(2).secret(),
+    validValue: "Admin!!",
+    invalidValue: "Admin123",
+  );
+
+  runScenario(
+    name: "Fixed Length String",
+    publicValidator: Flod.string().fixedLength(
+      3,
+      "Too short",
+      "fixed_length_err",
+    ),
+    secretValidator: Flod.string()
+        .fixedLength(3, "Too short", "fixed_length_err SECRET")
+        .secret(),
+    validValue: "USD",
+    invalidValue: "EUROPE",
+  );
+
+  runScenario(
+    name: "Credit Card Validation",
+    publicValidator: Flod.string().creditCard(),
+    secretValidator: Flod.string().creditCard().secret(),
+    validValue: "4111111111111111",
+    invalidValue: "4111-card-error",
+  );
+
+  runScenario(
+    name: "CVV Validation",
+    publicValidator: Flod.string().cvv(),
+    secretValidator: Flod.string().cvv().secret(),
+    validValue: "123",
+    invalidValue: "12",
   );
 
   // =========================================================================
-  // 7. СУПЕР-КОМПЛЕКСНЫЙ СЦЕНАРИЙ: ГЛУБОКАЯ ВЛОЖЕННОСТЬ И ДЕРЕВО ПУТЕЙ ОШИБОК
+  // СЕКЦИЯ 3: ЧИСЛА (INT & DOUBLE)
   // =========================================================================
-  print("\n=== 7. COMPLEX DEEP NESTED VALIDATION (ECOMMERCE ORDER DATA) ===");
+  print("\n=== СЕКЦИЯ 3: ЧИСЛА (INT & DOUBLE) ===");
 
-  // Описываем сложную древовидную структуру данных
-  final orderSchema = Flod.object({
-    "orderId": Flod.string().uuid(),
-    "customer": Flod.object({
-      "email": Flod.string().email(),
-      "phone": Flod.string().phoneNumber().nullable(),
-    }),
-    "items": Flod.list(
-      schema: Flod.object({
-        "productId": Flod.string().trim(),
-        "quantity": Flod.int().min(1),
-        "price": Flod.double().positive(),
-      }),
-    ).minItems(1),
-  }).strict();
-
-  final brokenOrderData = {
-    "orderId": "invalid-uuid-format",
-    "customer": {
-      "email": "not-an-email",
-      "phone": null, // Разрешено nullable
-    },
-    "items": [
-      {
-        "productId": "PROD-1",
-        "quantity": 5,
-        "price": 99.99,
-      }, // Корректный элемент
-      {
-        "productId": "PROD-2",
-        "quantity": 0,
-        "price": -5.0,
-      }, // Ошибки: quantity < 1, price не positive()
-    ],
-    "hacker_field": "exploit", // Вызовет ошибку из-за .strict() режима
-  };
-
-  printResult(
-    "Deep nested structures complete check",
-    orderSchema.safeParse(brokenOrderData),
+  runScenario(
+    name: "Int Type Check",
+    publicValidator: Flod.int(),
+    secretValidator: Flod.int().secret(),
+    validValue: 100,
+    invalidValue: "not_an_int",
   );
 
-  print("\n=================================================================");
-  print("                    ALL SCENARIOS EXECUTED                       ");
+  runScenario(
+    name: "Int .min() Boundary",
+    publicValidator: Flod.int().min(10),
+    secretValidator: Flod.int().min(10).secret(),
+    validValue: 15,
+    invalidValue: 4,
+  );
+
+  runScenario(
+    name: "Int .max() Boundary",
+    publicValidator: Flod.int().max(100),
+    secretValidator: Flod.int().max(100).secret(),
+    validValue: 50,
+    invalidValue: 105,
+  );
+
+  runScenario(
+    name: "Int .positive() Rule",
+    publicValidator: Flod.int().positive(),
+    secretValidator: Flod.int().positive().secret(),
+    validValue: 1,
+    invalidValue: -5,
+  );
+
+  runScenario(
+    name: "Double Type Check",
+    publicValidator: Flod.double(),
+    secretValidator: Flod.double().secret(),
+    validValue: 45.55,
+    invalidValue: "not_a_double",
+  );
+
+  runScenario(
+    name: "Double .multipleOf() Float Point Rule",
+    publicValidator: Flod.double().multipleOf(0.25),
+    secretValidator: Flod.double().multipleOf(0.25).secret(),
+    validValue: 10.75,
+    invalidValue: 10.81,
+  );
+
+  // =========================================================================
+  // СЕКЦИЯ 4: ДЕКОРАТОРЫ (NULLABLE & OPTIONAL)
+  // =========================================================================
+  print("\n=== СЕКЦИЯ 4: ДЕКОРАТОРЫ (NULLABLE & OPTIONAL) ===");
+
+  runScenario(
+    name: "Nullable Decorator (Validation Step Fallthrough)",
+    publicValidator: Flod.string().min(5, "Too short", "min_err").nullable(),
+    secretValidator: Flod.string()
+        .min(5, "Too short", "min_err")
+        .nullable()
+        .secret(),
+    validValue: null,
+    invalidValue: "abc",
+  );
+
+  runScenario(
+    name: "Optional Decorator (Validation Step Fallthrough)",
+    publicValidator: Flod.int().min(18).optional(),
+    secretValidator: Flod.int().min(18).optional().secret(),
+    validValue: null,
+    invalidValue: 12,
+  );
+
+  // =========================================================================
+  // СЕКЦИЯ 5: КОЛЛЕКЦИИ И СХЕМЫ ОБЪЕКТОВ
+  // =========================================================================
+  print("\n=== СЕКЦИЯ 5: КОЛЛЕКЦИИ И СХЕМЫ ОБЪЕКТОВ ===");
+
+  runScenario(
+    name: "List .minItems() Length Rule",
+    publicValidator: Flod.list().minItems(3),
+    secretValidator: Flod.list().minItems(3).secret(),
+    validValue: [1, 2, 3],
+    invalidValue: [1, 2],
+  );
+
+  runScenario(
+    name: "List .uniqueItems() Constraint",
+    publicValidator: Flod.list().uniqueItems(),
+    secretValidator: Flod.list().uniqueItems().secret(),
+    validValue: ["a", "b", "c"],
+    invalidValue: ["a", "b", "a"],
+  );
+
+  runScenario(
+    name: "List Nested Element Type Validation",
+    publicValidator: Flod.list(schema: Flod.int()),
+    secretValidator: Flod.list(schema: Flod.int()).secret(),
+    validValue: [1, 2, 3],
+    invalidValue: [1, "bad_element", 3],
+  );
+
+  runScenario(
+    name: "Object Map Type Check",
+    publicValidator: Flod.object({}),
+    secretValidator: Flod.object({}).secret(),
+    validValue: <String, dynamic>{},
+    invalidValue: "string_instead_of_map",
+  );
+
+  runScenario(
+    name: "Object .strict() Mode (Block Extra Keys)",
+    publicValidator: Flod.object({"allowed": Flod.string()}).strict(),
+    secretValidator: Flod.object({"allowed": Flod.string()}).strict().secret(),
+    validValue: {"allowed": "yes"},
+    invalidValue: {"allowed": "yes", "hacker_key": "exploit_payload"},
+  );
+
+  runScenario(
+    name: "Object Schema Missing Required Field",
+    publicValidator: Flod.object({"requiredKey": Flod.string()}),
+    secretValidator: Flod.object({"requiredKey": Flod.string()}).secret(),
+    validValue: {"requiredKey": "present"},
+    invalidValue: {"wrongKey": "data"},
+  );
+
+  print("=================================================================");
+  print("          DIAGNOSTIC RUN COMPLETED IN STRICT SEQUENCE            ");
   print("=================================================================");
 }

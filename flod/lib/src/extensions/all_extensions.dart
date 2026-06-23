@@ -1,5 +1,5 @@
 import 'package:flod/flod.dart';
-import 'package:flod/src/rules/string/regex_rule.dart';
+import 'package:flod/src/rules/regexp/regex_rule.dart';
 
 // =========================================================================
 // 1. БАЗОВЫЕ МЕТОДЫ (Доступны ВСЕМ валидаторам)
@@ -18,6 +18,27 @@ extension ValidatorExtensions<T> on Validator<T> {
 // 2. ЕДИНЫЕ РАСШИРЕНИЯ ДЛЯ СТРОК (Трансформации + Доменные правила)
 // =========================================================================
 extension StringExtensions on StringValidator {
+  // --- Вспомагательный метод (Алгоритм Луна)
+  bool isValidLuhn(String number) {
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return false;
+
+    int sum = 0;
+    bool alternate = false;
+
+    for (int i = digits.length - 1; i >= 0; i--) {
+      int n = int.parse(digits[i]);
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+
+    return sum % 10 == 0;
+  }
+
   // --- Трансформации ---
   StringValidator trim() {
     addTransform((v) => v is String ? v.trim() : v);
@@ -53,6 +74,39 @@ extension StringExtensions on StringValidator {
     message: message,
     code: code,
   );
+
+  StringValidator creditCard({
+    String message = 'Invalid credit card format',
+    String code = 'invalid_credit_card',
+  }) => custom(
+    (value) {
+      final digits = value.replaceAll(RegExp(r'\D'), '');
+      if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
+      return _isValidLuhn(digits);
+    },
+    message: message,
+    code: code,
+  );
+
+  bool _isValidLuhn(String digits) {
+    int sum = 0;
+    bool alternate = false;
+    for (int i = digits.length - 1; i >= 0; i--) {
+      int n = int.parse(digits[i]);
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+    return sum % 10 == 0;
+  }
+
+  StringValidator cvv({
+    String message = 'Invalid CVV',
+    String code = 'invalid_cvv',
+  }) => regex(RegExp(r'^\d{3,4}$'), message: message, code: code);
 
   StringValidator html5Email({
     String message = 'Invalid email format',
@@ -132,8 +186,20 @@ extension NumberExtensions<T extends num> on BaseNumberValidator<T> {
     return min(zero, message: 'Must be positive', code: 'not_positive');
   }
 
-  BaseNumberValidator<T> multipleOf(num value) {
-    return this;
+  BaseNumberValidator<T> multipleOf(num base) {
+    return custom(
+      (value) {
+        if (base == 0) return false;
+
+        // Избегаем проблем округления double через эпсилон-проверку
+        final double division = value / base;
+        final double remainder = (division - division.round()).abs();
+
+        return remainder < 1e-9; // Высокая точность до 9 знака
+      },
+      message: 'Must be multiple of $base',
+      code: 'multiple_of',
+    );
   }
 }
 

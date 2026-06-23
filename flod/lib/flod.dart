@@ -11,15 +11,15 @@ export 'src/res/parse_result.dart';
 export 'src/res/validation_result.dart';
 // Types & Results
 export 'src/types/path.dart';
-export 'src/validators/base_number_validator.dart'; // Обязательно экспортируй базовый
-export 'src/validators/double_validator.dart';
-export 'src/validators/int_validator.dart';
-export 'src/validators/list_validator.dart';
-export 'src/validators/nullable_validator.dart';
-export 'src/validators/object_validator.dart';
-export 'src/validators/optional_validator.dart';
+export 'src/validators/number_validator/base_number_validator.dart'; // Обязательно экспортируй базовый
+export 'src/validators/number_validator/double_validator.dart';
+export 'src/validators/number_validator/int_validator.dart';
+export 'src/validators/list_validator/list_validator.dart';
+export 'src/validators/nullable_and_optional_validator/nullable_validator.dart';
+export 'src/validators/object_validator/object_validator.dart';
+export 'src/validators/nullable_and_optional_validator/optional_validator.dart';
 // Validators
-export 'src/validators/string_validator.dart';
+export 'src/validators/string_validator/string_validator.dart';
 
 // Удобная фабрика Flod
 class Flod {
