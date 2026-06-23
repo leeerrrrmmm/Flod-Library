@@ -3,6 +3,8 @@ import 'package:flod/src/error.dart';
 sealed class ValidationResult<T> {
   const ValidationResult();
 
+  ValidationResult.flodFailure(List<FlodError> errors);
+
   bool get isSuccess => this is FlodSuccess<T>;
   bool get isFailure => this is FlodFailure<T>;
 

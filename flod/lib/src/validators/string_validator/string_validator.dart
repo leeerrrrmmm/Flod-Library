@@ -2,45 +2,66 @@ import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/core/validator.dart';
 import 'package:flod/src/error.dart';
 import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/rules/string/base_string_rule.dart';
 import 'package:flod/src/rules/regexp/custom_regexp_rule.dart';
+import 'package:flod/src/rules/regexp/regex_rule.dart';
+import 'package:flod/src/rules/string/base_string_rule.dart';
 import 'package:flod/src/rules/string/fixed_length_rule.dart';
 import 'package:flod/src/rules/string/max_length_rule.dart';
 import 'package:flod/src/rules/string/min_length_rule.dart';
-import 'package:flod/src/rules/regexp/regex_rule.dart';
 import 'package:flod/src/types/path.dart';
 
 class StringValidator extends Validator<String> with Transformable<String> {
   final List<BaseStringRule> rules;
-  final List<Transformer<String>> _capturedTransformers;
 
-  StringValidator([
+  @override
+  final List<Transformer<String>> transformers;
+
+  // Теперь конструктор может быть полностью const, что идеально для производительности
+  const StringValidator([
     this.rules = const [],
-    List<Transformer<String>> capturedTransformers = const [],
+    this.transformers = const [],
     bool isSecret = false,
-  ]) : _capturedTransformers = List.from(capturedTransformers),
-       super(isSecret: isSecret) {
-    for (final transform in _capturedTransformers) {
-      super.addTransform(transform);
-    }
-  }
+  ]) : super(isSecret: isSecret);
 
   @override
   StringValidator secret() => copyWith(isSecret: true);
 
-  @override
-  void addTransform(Transformer<String> transform) {
-    _capturedTransformers.add(transform);
-    super.addTransform(transform);
-  }
+  // =========================================================================
+  // ВСТРОЕННЫЕ УТИЛИТЫ НОРМАЛИЗАЦИИ (БЛОК 5.2 DONE)
+  // =========================================================================
 
-  StringValidator copyWith({List<BaseStringRule>? rules, bool? isSecret}) {
+  /// Удаляет пробелы по краям строки перед валидацией
+  StringValidator trim() => _copyWithTransform((v) => v.trim());
+
+  /// Приводит строку к нижнему регистру перед валидацией
+  StringValidator toLowerCase() => _copyWithTransform((v) => v.toLowerCase());
+
+  /// Приводит строку к верхнему регистру перед валидацией
+  StringValidator toUpperCase() => _copyWithTransform((v) => v.toUpperCase());
+
+  // =========================================================================
+  // МЕНЕДЖМЕНТ СОСТОЯНИЯ СХЕМЫ
+  // =========================================================================
+
+  StringValidator copyWith({
+    List<BaseStringRule>? rules,
+    List<Transformer<String>>? transformers,
+    bool? isSecret,
+  }) {
     return StringValidator(
       rules ?? this.rules,
-      _capturedTransformers,
+      transformers ?? this.transformers,
       isSecret ?? this.isSecret,
     );
   }
+
+  StringValidator _copyWithTransform(Transformer<String> transform) {
+    return copyWith(transformers: [...transformers, transform]);
+  }
+
+  // =========================================================================
+  // ПРАВИЛА ВАЛИДАЦИИ
+  // =========================================================================
 
   StringValidator min(int length, String message, String code) {
     return copyWith(
@@ -86,8 +107,13 @@ class StringValidator extends Validator<String> with Transformable<String> {
     );
   }
 
+  // =========================================================================
+  // ЯДРО ВАЛИДАЦИИ
+  // =========================================================================
+
   @override
   ValidationResult<String> validate(dynamic value, {Path path = const []}) {
+    // 1. Проверка типа (Guard Clause) ДО каких-либо мутаций
     if (value is! String) {
       return FlodFailure([
         FlodError(
@@ -100,9 +126,13 @@ class StringValidator extends Validator<String> with Transformable<String> {
       ]);
     }
 
-    final String transformed = applyTransforms(value);
+    // 2. EXECUTION ORDER (5.3): Сначала полностью трансформируем данные
+    final dynamic rawTransformed = applyTransforms(value);
+    final String transformed = rawTransformed as String;
+
     final errors = <FlodError>[];
 
+    // 3. Валидируем уже очищенную, нормализованную строку
     for (final rule in rules) {
       final result = rule.check(transformed);
 
@@ -112,7 +142,7 @@ class StringValidator extends Validator<String> with Transformable<String> {
             path,
             rule.message,
             rule.code,
-            value: transformed,
+            value: transformed, // В логи летит уже трансформированное значение!
             isSecret: isSecret,
           ),
         );

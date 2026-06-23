@@ -7,26 +7,56 @@ import 'package:flod/src/validators/number_validator/base_number_validator.dart'
 
 class DoubleValidator extends BaseNumberValidator<double>
     with Transformable<double> {
-  DoubleValidator([super.rules, super.isSecret]);
+  @override
+  final List<Transformer<double>> transformers;
+
+  // Константный конструктор с правильным пробросом super-параметров
+  const DoubleValidator([
+    super.rules = const [],
+    this.transformers = const [],
+    super.isSecret,
+  ]);
 
   @override
-  DoubleValidator secret() {
-    return copyWith(rules, isSecret: true);
+  DoubleValidator secret() => copyWith(rules, isSecret: true);
+
+  /// Иммутабельный метод добавления трансформации для дробных чисел
+  DoubleValidator _copyWithTransform(Transformer<double> transform) {
+    return copyWith(rules, transformers: [...transformers, transform]);
   }
+
+  // =========================================================================
+  // ВСТРОЕННЫЕ ЧИСЛОВЫЕ ТРАНСФОРМЕРЫ
+  // =========================================================================
+
+  /// Автоматически берет модуль числа перед валидацией
+  DoubleValidator abs() => _copyWithTransform((v) => (v as double).abs());
+
+  // =========================================================================
+  // МЕНЕДЖМЕНТ СОСТОЯНИЯ СХЕМЫ (Валидный override сигнатуры)
+  // =========================================================================
 
   @override
   DoubleValidator copyWith(
-    List<BaseNumberRule<double>> newRules, {
+    List<BaseNumberRule<double>> rules, {
+    List<Transformer<double>>? transformers,
     bool? isSecret,
   }) {
-    return DoubleValidator(newRules, isSecret ?? this.isSecret);
+    return DoubleValidator(
+      rules,
+      transformers ?? this.transformers,
+      isSecret ?? this.isSecret,
+    );
   }
+
+  // =========================================================================
+  // ЯДРО ВАЛИДАЦИИ
+  // =========================================================================
 
   @override
   ValidationResult<double> validate(dynamic value, {Path path = const []}) {
-    final dynamic transformed = applyTransforms(value);
-
-    if (transformed is! double) {
+    // ЗАЩИТА 1: Сначала проверяем тип, оберегая конвейер трансформаций от падений
+    if (value is! double) {
       return FlodFailure([
         FlodError(
           path,
@@ -38,13 +68,18 @@ class DoubleValidator extends BaseNumberValidator<double>
       ]);
     }
 
+    // EXECUTION ORDER (5.3): Прогоняем число через пайплайн трансформаций
+    final dynamic rawTransformed = applyTransforms(value);
+    final double transformed = rawTransformed as double;
+
+    // ЗАЩИТА 2: Проверяем на Finite / NaN уже трансформированное число
     if (!transformed.isFinite) {
       return FlodFailure([
         FlodError(
           path,
           'Value must be finite and not NaN',
           'invalid_number',
-          value: value,
+          value: transformed, // В лог уходит актуальное состояние
           isSecret: isSecret,
         ),
       ]);
@@ -52,6 +87,7 @@ class DoubleValidator extends BaseNumberValidator<double>
 
     final errors = <FlodError>[];
 
+    // Валидация по цепочке доменных правил
     for (final rule in rules) {
       if (!rule.check(transformed)) {
         errors.add(

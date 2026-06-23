@@ -1,10 +1,12 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/rules/regexp/regex_rule.dart';
+import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 // =========================================================================
 // 1. БАЗОВЫЕ МЕТОДЫ (Доступны ВСЕМ валидаторам)
 // =========================================================================
 extension ValidatorExtensions<T> on Validator<T> {
+  /// Безопасный парсинг без выбрасывания исключений (возвращает ParseResult)
   ParseResult<T> safeParse(dynamic value) {
     final result = validate(value);
     if (result.isFailure) {
@@ -12,13 +14,22 @@ extension ValidatorExtensions<T> on Validator<T> {
     }
     return ParseResult.success(result.data);
   }
+
+  /// Жесткий парсинг: возвращает чистые данные T или бросает ValidationException
+  T parse(dynamic value) {
+    final result = validate(value);
+    if (result.isFailure) {
+      throw ValidationException(result.errors);
+    }
+    return result.data;
+  }
 }
 
 // =========================================================================
 // 2. ЕДИНЫЕ РАСШИРЕНИЯ ДЛЯ СТРОК (Трансформации + Доменные правила)
 // =========================================================================
 extension StringExtensions on StringValidator {
-  // --- Вспомагательный метод (Алгоритм Луна)
+  // --- Вспомогательный метод (Алгоритм Луна)
   bool isValidLuhn(String number) {
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return false;
@@ -39,16 +50,14 @@ extension StringExtensions on StringValidator {
     return sum % 10 == 0;
   }
 
-  // --- Трансформации ---
-  StringValidator trim() {
-    addTransform((v) => v is String ? v.trim() : v);
-    return this;
-  }
+  // // --- Трансформации через иммутабельный transform pipeline ---
+  // StringValidator trim() {
+  //   return transform((v) => v.trim());
+  // }
 
-  StringValidator toLowerCase() {
-    addTransform((v) => v is String ? v.toLowerCase() : v);
-    return this;
-  }
+  // StringValidator toLowerCase() {
+  //   return transform((v) => v.toLowerCase());
+  // }
 
   // --- Базовый метод для регулярных выражений через copyWith ---
   StringValidator regex(
@@ -181,9 +190,38 @@ extension StringExtensions on StringValidator {
 // 3. РАСШИРЕНИЯ ДЛЯ ЧИСЕЛ И ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ
 // =========================================================================
 extension NumberExtensions<T extends num> on BaseNumberValidator<T> {
-  BaseNumberValidator<T> positive() {
+  /// Строго положительное число (> 0)
+  BaseNumberValidator<T> positive({
+    String message = 'Must be positive',
+    String code = 'not_positive',
+  }) {
+    return custom((v) => v > 0, message: message, code: code);
+  }
+
+  /// Неположительное число (<= 0)
+  BaseNumberValidator<T> nonPositive({
+    String message = 'Must be non-positive',
+    String code = 'not_non_positive',
+  }) {
     final zero = (T == double ? 0.0 : 0) as T;
-    return min(zero, message: 'Must be positive', code: 'not_positive');
+    return max(zero, message: message, code: code);
+  }
+
+  /// Строго отрицательное число (< 0)
+  BaseNumberValidator<T> negative({
+    String message = 'Must be negative',
+    String code = 'not_negative',
+  }) {
+    return custom((v) => v < 0, message: message, code: code);
+  }
+
+  /// Неотрицательное число (>= 0) — полезно иметь в комплекте
+  BaseNumberValidator<T> nonNegative({
+    String message = 'Must be non-negative',
+    String code = 'not_non_negative',
+  }) {
+    final zero = (T == double ? 0.0 : 0) as T;
+    return min(zero, message: message, code: code);
   }
 
   BaseNumberValidator<T> multipleOf(num base) {
@@ -209,8 +247,6 @@ extension PathExtensions on List {
 
 extension PathReadable on List<dynamic> {
   String toReadable() {
-    // Если путь пустой (например, корень объекта), возвращаем 'root',
-    // в остальных случаях — запускаем твою функцию форматирования.
     return isEmpty ? 'root' : formatPath(this);
   }
 }

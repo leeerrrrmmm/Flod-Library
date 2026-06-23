@@ -12,41 +12,42 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
   final Map<String, Validator> schema;
   final ObjectMode mode;
 
-  // Конструктор принимает super.isSecret и передает его наверх
-  ObjectValidator(
+  @override
+  final List<Transformer<Map<String, dynamic>>> transformers;
+
+  const ObjectValidator(
     this.schema, {
     this.mode = ObjectMode.passthrough,
-    super.isSecret,
+    this.transformers = const [],
+    super.isSecret = false,
   });
 
-  // Контракт Fluent API с правильной типизацией
   @override
   ObjectValidator secret() => copyWith(isSecret: true);
 
-  // Добавляем copyWith для сохранения всех флагов при чейнинге
+  ObjectValidator strict() => copyWith(mode: ObjectMode.strict);
+  ObjectValidator passthrough() => copyWith(mode: ObjectMode.passthrough);
+
   ObjectValidator copyWith({
     Map<String, Validator>? schema,
     ObjectMode? mode,
+    List<Transformer<Map<String, dynamic>>>? transformers,
     bool? isSecret,
   }) {
     return ObjectValidator(
       schema ?? this.schema,
       mode: mode ?? this.mode,
+      transformers: transformers ?? this.transformers,
       isSecret: isSecret ?? this.isSecret,
     );
   }
-
-  ObjectValidator strict() => copyWith(mode: ObjectMode.strict);
-  ObjectValidator passthrough() => copyWith(mode: ObjectMode.passthrough);
 
   @override
   ValidationResult<Map<String, dynamic>> validate(
     dynamic value, {
     Path path = const [],
   }) {
-    final dynamic transformed = applyTransforms(value);
-
-    if (transformed is! Map<String, dynamic>) {
+    if (value is! Map<String, dynamic>) {
       return FlodFailure([
         FlodError(
           path,
@@ -58,9 +59,14 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       ]);
     }
 
+    final dynamic rawTransformed = applyTransforms(value);
+    final Map<String, dynamic> transformed = Map<String, dynamic>.from(
+      rawTransformed,
+    );
+
+    final Map<String, dynamic> outputResult = {};
     final errors = <FlodError>[];
 
-    // 1. Strict Mode
     if (mode == ObjectMode.strict) {
       for (final key in transformed.keys) {
         if (!schema.containsKey(key)) {
@@ -70,15 +76,21 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
               'Unknown key',
               'strict_mode',
               value: transformed[key],
-              isSecret:
-                  isSecret, // Скрываем значение лишнего ключа, если объект секретный
+              isSecret: isSecret,
             ),
           );
         }
       }
     }
 
-    // 2. Валидация полей
+    if (mode == ObjectMode.passthrough) {
+      transformed.forEach((key, val) {
+        if (!schema.containsKey(key)) {
+          outputResult[key] = val;
+        }
+      });
+    }
+
     for (final entry in schema.entries) {
       final key = entry.key;
       final validator = entry.value;
@@ -87,8 +99,9 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
         final fieldValue = transformed[key];
         final result = validator.validate(fieldValue, path: [...path, key]);
 
-        if (result.isFailure) {
-          // Если весь объект секретный, принудительно обфусцируем ошибки вложенных полей
+        if (result is FlodSuccess) {
+          outputResult[key] = result.data;
+        } else if (result is FlodFailure) {
           if (isSecret) {
             final obfuscatedErrors = result.errors
                 .map(
@@ -119,6 +132,6 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       }
     }
 
-    return errors.isEmpty ? FlodSuccess(transformed) : FlodFailure(errors);
+    return errors.isEmpty ? FlodSuccess(outputResult) : FlodFailure(errors);
   }
 }
