@@ -22,6 +22,10 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     super.isSecret = false,
   });
 
+  // Прямо возвращаем значение из schema для поддержки быстрого O(1) роутинга
+  @override
+  Validator? getFieldSchema(String key) => schema[key];
+
   @override
   ObjectValidator secret() => copyWith(isSecret: true);
 

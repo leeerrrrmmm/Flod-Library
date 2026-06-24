@@ -151,6 +151,65 @@ void main() {
   );
 
   // =========================================================================
+  // СЕКЦИЯ 6: UNION TYPES (NEW)
+  // =========================================================================
+  print("=== СЕКЦИЯ 6: UNION TYPES ===");
+
+  runScenario(
+    name: "6.1.1. Plain Union Logic (Primitive Fallback: String | Int)",
+    publicValidator: Flod.union([Flod.string(), Flod.int()]),
+    secretValidator: Flod.union([Flod.string(), Flod.int()]).secret(),
+    validValue:
+        42, // Должен успешно пропустить int (или "текст" в другом тесте)
+    invalidValue: true, // Ломается, так как bool не входит в union
+  );
+
+  runScenario(
+    name: "6.1.2. Plain Union Logic (Complex Objects Fallback)",
+    // Обычный последовательный перебор несовпадающих объектных структур
+    publicValidator: Flod.union([
+      Flod.object({"type": Flod.literal("user"), "name": Flod.string()}),
+      Flod.object({"type": Flod.literal("bot"), "id": Flod.int()}),
+    ]),
+    secretValidator: Flod.union([
+      Flod.object({"type": Flod.literal("user"), "name": Flod.string()}),
+      Flod.object({"type": Flod.literal("bot"), "id": Flod.int()}),
+    ]).secret(),
+    validValue: {"type": "bot", "id": 777},
+    invalidValue: {"type": "guest", "web": true},
+  );
+
+  runScenario(
+    name: "6.2.1. Tagged/Discriminated Union Optimization O(1) Routing",
+
+    publicValidator: Flod.union([
+      Flod.object({
+        "kind": Flod.literal("email"),
+        "address": Flod.string().email(),
+      }),
+      Flod.object({
+        "kind": Flod.literal("phone"),
+        "number": Flod.string().phoneNumber(),
+      }),
+    ]).discriminatedBy("kind"),
+
+    secretValidator: Flod.union([
+      Flod.object({
+        "kind": Flod.literal("email"),
+        "address": Flod.string().email(),
+      }),
+      Flod.object({
+        "kind": Flod.literal("phone"),
+        "number": Flod.string().phoneNumber(),
+      }),
+    ]).discriminatedBy("kind").secret(),
+
+    validValue: {"kind": "email", "address": "test@flod.io"},
+
+    invalidValue: {"kind": "phone", "number": "invalid-phone-format"},
+  );
+
+  // =========================================================================
   // СЕКЦИЯ 4 & 5: COLLECTIONS & TRANSFORMS
   // =========================================================================
   print("=== СЕКЦИЯ 4 & 5: COLLECTIONS & TRANSFORMS ===");
@@ -211,7 +270,6 @@ void main() {
   runScenario(
     name: "5.3.1. Execution Order (Transform runs BEFORE validation rules)",
     // Сначала обрезаем пробелы, и только потом проверяем фиксированную длину.
-    // Если бы валидация шла ДО трансформера, " EUR " упал бы с ошибкой длины (5 вместо 3).
     publicValidator: Flod.string().trim().fixedLength(
       3,
       "Fixed length error",
@@ -230,9 +288,6 @@ void main() {
   runScenario(
     name:
         "5.4. Ultimate Deep Chaining Pipeline (Multi-stage mutation & Privacy check)",
-    // Цепочка: String -> Стрип пробелов -> Ловеркейс -> Изменение типа в int (длина) -> Проверка кратности
-    // Внимание: Если твоя архитектура требует вызова .pipe() для перехода между валидаторами
-    // разных типов, этот тест подсветит, как ведет себя система типов Dart.
     publicValidator: Flod.string()
         .trim()
         .toLowerCase()
@@ -277,7 +332,7 @@ void main() {
     publicValidator: Flod.int().positive(),
     secretValidator: Flod.int().positive().secret(),
     validValue: 42,
-    invalidValue: 0, // Ноль не является строго положительным
+    invalidValue: 0,
   );
 
   runScenario(
@@ -292,7 +347,7 @@ void main() {
     name: "19.6.3. Specialized Signs (.nonPositive)",
     publicValidator: Flod.int().nonPositive(),
     secretValidator: Flod.int().nonPositive().secret(),
-    validValue: 0, // Ноль разрешен
+    validValue: 0,
     invalidValue: 1,
   );
 
@@ -300,7 +355,7 @@ void main() {
     name: "19.6.4. Specialized Signs (.nonNegative)",
     publicValidator: Flod.int().nonNegative(),
     secretValidator: Flod.int().nonNegative().secret(),
-    validValue: 0, // Ноль разрешен
+    validValue: 0,
     invalidValue: -1,
   );
 
@@ -386,7 +441,7 @@ void main() {
   runScenario(
     name: "20.8. CVV Domain Logic",
     publicValidator: Flod.string().cvv(),
-    secretValidator: Flod.string().cvv().secret(),
+    secretValidator: Flod.string().creditCard().secret(),
     validValue: "123",
     invalidValue: "41111-error",
   );
