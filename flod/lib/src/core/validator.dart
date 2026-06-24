@@ -10,6 +10,5 @@ abstract class Validator<T> {
   Validator<R> transform<R>(R Function(T value) cb) {
     return TransformValidator<T, R>(this, cb);
   }
-
   Validator? getFieldSchema(String key) => null;
 }

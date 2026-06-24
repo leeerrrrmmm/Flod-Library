@@ -17,6 +17,25 @@ sealed class ValidationResult<T> {
     if (this case FlodFailure<T>(errors: final e)) return e;
     throw StateError('Try to get errors from FlodSuccess');
   }
+
+  // Позволяет удобно прокинуть результат дальше
+  R fold<R>(
+    R Function(List<FlodError> errors) onFailure,
+    R Function(T data) onSuccess,
+  ) {
+    return switch (this) {
+      FlodFailure(errors: final e) => onFailure(e),
+      FlodSuccess(data: final d) => onSuccess(d),
+    };
+  }
+
+  // Полезно для цепочек: если успех, делаем что-то еще
+  ValidationResult<R> map<R>(R Function(T data) transform) {
+    return switch (this) {
+      FlodFailure(errors: final e) => FlodFailure(e),
+      FlodSuccess(data: final d) => FlodSuccess(transform(d)),
+    };
+  }
 }
 
 class FlodSuccess<T> extends ValidationResult<T> {
@@ -31,4 +50,6 @@ class FlodFailure<T> extends ValidationResult<T> {
   final List<FlodError> errors;
 
   const FlodFailure(this.errors);
+  // Фабрика для быстрого создания одной ошибки (идеально для abortEarly)
+  factory FlodFailure.single(FlodError error) => FlodFailure([error]);
 }

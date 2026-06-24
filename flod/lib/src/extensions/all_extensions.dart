@@ -1,10 +1,16 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/decorator/default_decorator.dart';
 import 'package:flod/src/rules/regexp/regex_rule.dart';
 import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 // =========================================================================
 // 1. БАЗОВЫЕ МЕТОДЫ (Доступны ВСЕМ валидаторам)
 // =========================================================================
+
+extension DefaultExtension<T> on Validator<T> {
+  DefaultDecorator<T> defaultValue(T value) => DefaultDecorator<T>(this, value);
+}
+
 extension ValidatorExtensions<T> on Validator<T> {
   /// Безопасный парсинг без выбрасывания исключений (возвращает ParseResult)
   ParseResult<T> safeParse(dynamic value) {
@@ -49,15 +55,6 @@ extension StringExtensions on StringValidator {
 
     return sum % 10 == 0;
   }
-
-  // // --- Трансформации через иммутабельный transform pipeline ---
-  // StringValidator trim() {
-  //   return transform((v) => v.trim());
-  // }
-
-  // StringValidator toLowerCase() {
-  //   return transform((v) => v.toLowerCase());
-  // }
 
   // --- Базовый метод для регулярных выражений через copyWith ---
   StringValidator regex(
@@ -153,7 +150,7 @@ extension StringExtensions on StringValidator {
     String code = 'invalid_uuid',
   }) => regex(
     RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
     ),
     message: message,
     code: code,
