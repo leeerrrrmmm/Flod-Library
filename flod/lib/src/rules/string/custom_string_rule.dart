@@ -1,10 +1,11 @@
 import 'package:flod/src/rules/string/base_string_rule.dart';
 
-class CustomRegexpRule extends BaseStringRule {
+/// Custom string validation rule with optional [metaParams] for i18n context.
+class CustomStringRule extends BaseStringRule {
   final bool Function(String value) predicate;
   final Map<String, dynamic>? metaParams;
 
-  const CustomRegexpRule(
+  const CustomStringRule(
     this.predicate, {
     required super.code,
     this.metaParams,

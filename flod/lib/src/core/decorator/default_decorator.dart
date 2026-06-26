@@ -16,7 +16,14 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
   });
 
   @override
-  DefaultDecorator<T> secret() => copyWith(isSecret: true);
+  DefaultDecorator<T> secret() {
+    return DefaultDecorator<T>(
+      _inner.secret(),
+      defaultValue,
+      transformers: transformers,
+      isSecret: true,
+    );
+  }
 
   DefaultDecorator<T> copyWith({
     Validator<T>? inner,
@@ -33,8 +40,8 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
   }
 
   @override
-  ValidationResult<T> validate(dynamic value, {Path path = const []}) {
-    final dynamic transformed = applyTransforms(value);
+  ParseResult<T> validate(dynamic value, {FlodPath path = const FlodPath([]), bool? abortEarly}) {
+    final dynamic transformed = applyTransforms(value, path);
 
     // Если значение отсутствует (null), возвращаем дефолт
     if (transformed == null) {
@@ -42,7 +49,7 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
     }
 
     // Иначе идем вглубь
-    final result = _inner.validate(transformed, path: path);
+    final result = _inner.validate(transformed, path: path, abortEarly: abortEarly);
     return result;
   }
 }

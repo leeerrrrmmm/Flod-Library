@@ -7,6 +7,6 @@ class ValidationException implements Exception {
 
   @override
   String toString() {
-    return 'Validation Exception: ${errors.length} error(s) found. ${errors.map((e) => '${e.path.toReadable()}: ${e.message} (${e.code})').join('\n')}';
+    return 'Validation Exception: ${errors.length} error(s) found. ${errors.map((e) => '${e.path.toReadable()}: ${e.params} (${e.code})').join('\n')}';
   }
 }

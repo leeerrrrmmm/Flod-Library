@@ -1,16 +1,11 @@
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/types/path.dart';
+import 'package:flod/flod.dart';
 
 class LiteralValidator<T> extends Validator<T> {
   final T expectedValue;
-  final String? customMessage;
   final String? customCode;
 
   const LiteralValidator(
     this.expectedValue, {
-    this.customMessage,
     this.customCode,
     super.isSecret = false,
   });
@@ -20,29 +15,31 @@ class LiteralValidator<T> extends Validator<T> {
 
   LiteralValidator<T> copyWith({
     T? expectedValue,
-    String? customMessage,
     String? customCode,
     bool? isSecret,
   }) {
     return LiteralValidator<T>(
       expectedValue ?? this.expectedValue,
-      customMessage: customMessage ?? this.customMessage,
       customCode: customCode ?? this.customCode,
       isSecret: isSecret ?? this.isSecret,
     );
   }
 
   @override
-  ValidationResult<T> validate(dynamic value, {Path path = const []}) {
+  ParseResult<T> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) {
     if (value == expectedValue) {
-      return FlodSuccess(value as T);
+      return FlodSuccess<T>(value as T);
     }
 
     return FlodFailure([
       FlodError(
-        path,
-        customMessage ?? "Expected literal value '$expectedValue'",
-        customCode ?? "invalid_literal",
+        path: path,
+        code: customCode ?? FlodErrorCodes.invalidLiteral,
+        params: const {},
         value: value,
         isSecret: isSecret,
       ),

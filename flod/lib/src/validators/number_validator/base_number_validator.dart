@@ -1,4 +1,5 @@
 import 'package:flod/src/core/validator.dart';
+import 'package:flod/src/i18n/errors/errors_codes.dart';
 import 'package:flod/src/rules/numbers/base_number_rule.dart';
 import 'package:flod/src/rules/numbers/custom_number_rule.dart';
 import 'package:flod/src/rules/numbers/max_value_rule.dart';
@@ -17,34 +18,26 @@ abstract class BaseNumberValidator<T extends num> extends Validator<T> {
 
   BaseNumberValidator<T> custom(
     bool Function(T value) predicate, {
-    required String message,
     required String code,
+    Map<String, dynamic>? metaParams,
   }) {
     return copyWith([
       ...rules,
-      CustomNumberRule<T>(predicate, message: message, code: code),
+      CustomNumberRule<T>(predicate, code: code, metaParams: metaParams),
     ], isSecret: isSecret);
   }
 
-  BaseNumberValidator<T> min(
-    T minVal, {
-    String message = 'Too small',
-    String code = 'min_error',
-  }) {
+  BaseNumberValidator<T> min(T minVal, {String? code}) {
     return copyWith([
       ...rules,
-      MinValueRule(minVal, message, code),
+      MinValueRule(minVal, code: code ?? FlodErrorCodes.numberMin),
     ], isSecret: isSecret);
   }
 
-  BaseNumberValidator<T> max(
-    T maxVal, {
-    String message = 'Too large',
-    String code = 'max_error',
-  }) {
+  BaseNumberValidator<T> max(T maxVal, {String? code}) {
     return copyWith([
       ...rules,
-      MaxValueRule(maxVal, message, code),
+      MaxValueRule(maxVal, code: code ?? FlodErrorCodes.numberMax),
     ], isSecret: isSecret);
   }
 }

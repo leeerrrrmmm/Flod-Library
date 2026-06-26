@@ -1,6 +1,5 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/validators/literal_validator/literal_validator.dart';
 
 class UnionValidator<T> extends Validator<T> with Transformable<T> {
   final List<Validator> schemas;
@@ -104,8 +103,12 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
   }
 
   @override
-  ValidationResult<T> validate(dynamic value, {Path path = const []}) {
-    final transformedValue = applyTransforms(value);
+  ParseResult<T> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly = false,
+  }) {
+    final transformedValue = applyTransforms(value, path);
 
     // =========================
     // FAST PATH O(1)
@@ -117,7 +120,11 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
       final schema = discriminatorIndex[rawKey];
 
       if (schema != null) {
-        final result = schema.validate(transformedValue, path: path);
+        final result = schema.validate(
+          transformedValue,
+          path: path,
+          abortEarly: abortEarly,
+        );
 
         if (result is FlodSuccess) {
           final data = result.data;
@@ -128,9 +135,9 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
 
           return FlodFailure<T>([
             FlodError(
-              path,
-              'Union branch returned invalid type',
-              'invalid_union_type',
+              path: path,
+              code: FlodErrorCodes.invalidUnionType,
+              params: {},
               value: isSecret ? null : transformedValue,
               isSecret: isSecret,
             ),
@@ -160,9 +167,9 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
 
         allErrors.add(
           FlodError(
-            path,
-            'Union branch type mismatch',
-            'invalid_union_type',
+            path: path,
+            code: FlodErrorCodes.invalidUnionType,
+            params: {},
             value: isSecret ? null : transformedValue,
             isSecret: isSecret,
           ),
@@ -174,9 +181,9 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
 
     return FlodFailure<T>([
       FlodError(
-        path,
-        'Value does not match any union schema',
-        'invalid_union',
+        path: path,
+        code: FlodErrorCodes.union,
+        params: {},
         value: isSecret ? null : transformedValue,
         isSecret: isSecret,
       ),

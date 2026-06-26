@@ -1,15 +1,16 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 
-class ListValidator extends Validator<List<dynamic>>
-    with Transformable<List<dynamic>> {
-  final Validator? schema;
+/// Строго типизированный валидатор списков/коллекций.
+/// [T] обозначает тип элементов, находящихся внутри списка.
+class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
+  final Validator<T>? schema;
   final int? minItemsLength;
   final int? maxItemsLength;
   final bool isUnique;
 
   @override
-  final List<Transformer<List<dynamic>>> transformers;
+  final List<Transformer<List<T>>> transformers;
 
   const ListValidator({
     this.schema,
@@ -21,19 +22,17 @@ class ListValidator extends Validator<List<dynamic>>
   });
 
   @override
-  ListValidator secret() => copyWith(isSecret: true);
+  ListValidator<T> secret() => copyWith(isSecret: true);
 
-  // Метод _copyWithTransform удален, так как встроенных трансформаторов списка пока нет
-
-  ListValidator copyWith({
-    Validator? schema,
+  ListValidator<T> copyWith({
+    Validator<T>? schema,
     int? minItemsLength,
     int? maxItemsLength,
     bool? isUnique,
-    List<Transformer<List<dynamic>>>? transformers,
+    List<Transformer<List<T>>>? transformers,
     bool? isSecret,
   }) {
-    return ListValidator(
+    return ListValidator<T>(
       schema: schema ?? this.schema,
       minItemsLength: minItemsLength ?? this.minItemsLength,
       maxItemsLength: maxItemsLength ?? this.maxItemsLength,
@@ -43,40 +42,76 @@ class ListValidator extends Validator<List<dynamic>>
     );
   }
 
-  ListValidator minItems(int n) => copyWith(minItemsLength: n);
+  ListValidator<T> minItems(int n) => copyWith(minItemsLength: n);
 
-  ListValidator maxItems(int n) => copyWith(maxItemsLength: n);
+  ListValidator<T> maxItems(int n) => copyWith(maxItemsLength: n);
 
-  ListValidator uniqueItems() => copyWith(isUnique: true);
+  ListValidator<T> uniqueItems() => copyWith(isUnique: true);
 
   @override
-  ValidationResult<List<dynamic>> validate(
-    dynamic value, {
-    Path path = const [],
+  ParseResult<List<T>> validate(
+    dynamic input, {
+    FlodPath path = const FlodPath.empty(),
+    bool? abortEarly,
   }) {
-    if (value is! List) {
-      return FlodFailure<List<dynamic>>([
+    // 1. Проверяем базовый тип данных
+    if (input == null) {
+      return FlodFailure([
         FlodError(
-          path,
-          'Expected a list',
-          'invalid_type',
-          value: value,
+          path: path,
+          code: FlodErrorCodes.required,
+          params: const {},
+          value: input,
           isSecret: isSecret,
         ),
       ]);
     }
 
-    final dynamic rawTransformed = applyTransforms(value);
-    final List<dynamic> baseList = List<dynamic>.from(rawTransformed);
+    if (input is! List) {
+      return FlodFailure([
+        FlodError(
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: const {'expected': 'List', 'actual': 'Object'},
+          value: input,
+          isSecret: isSecret,
+        ),
+      ]);
+    }
+
+    // Безопасное приведение к Iterable для выполнения трансформаций
+    final List<dynamic> rawList = input;
+
+    // 2. Применяем пайплайн трансформаций (работаем с типизированным списком)
+    // Преобразуем исходный список к List<T> перед применением трансформеров,
+    // либо маппим элементы, если это необходимо.
+    List<T> baseList;
+    try {
+      baseList = List<T>.from(rawList);
+    } catch (_) {
+      return FlodFailure([
+        FlodError(
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: {'expected': 'List<$T>', 'actual': 'List<Dynamic>'},
+          value: input,
+          isSecret: isSecret,
+        ),
+      ]);
+    }
+
+    // Применяем зарегистрированные трансформаторы уровня списка
+    baseList = applyTransforms(baseList, path);
 
     final errors = <FlodError>[];
 
+    // 3. Проверка ограничений на длину списка
     if (minItemsLength != null && baseList.length < minItemsLength!) {
       errors.add(
         FlodError(
-          path,
-          'Expected at least $minItemsLength items',
-          'min_items',
+          path: path,
+          code: FlodErrorCodes.listMinItems,
+          params: {'limit': minItemsLength},
           value: baseList,
           isSecret: isSecret,
         ),
@@ -86,43 +121,37 @@ class ListValidator extends Validator<List<dynamic>>
     if (maxItemsLength != null && baseList.length > maxItemsLength!) {
       errors.add(
         FlodError(
-          path,
-          'Expected at most $maxItemsLength items',
-          'max_items',
+          path: path,
+          code: FlodErrorCodes.listMaxItems,
+          params: {'limit': maxItemsLength},
           value: baseList,
           isSecret: isSecret,
         ),
       );
     }
 
-    final List<dynamic> outputList = [];
+    final List<T> outputList = [];
 
+    // 4. Поэлементная валидация по вложенной схеме (schema)
     for (int i = 0; i < baseList.length; i++) {
       final nextPath = path.append(i);
       final item = baseList[i];
 
       if (schema != null) {
-        final res = schema!.validate(item, path: nextPath);
+        // Передаем статус секретности вглубь
+        final currentSchema = isSecret ? schema!.secret() : schema!;
+        final res = currentSchema.validate(
+          item,
+          path: nextPath,
+          abortEarly: abortEarly,
+        );
 
-        if (res is FlodSuccess) {
+        if (res is FlodSuccess<T>) {
           outputList.add(res.data);
-        } else if (res is FlodFailure) {
-          if (isSecret) {
-            final obfuscatedErrors = res.errors
-                .map(
-                  (e) => FlodError(
-                    e.path,
-                    e.message,
-                    e.code,
-                    value: null,
-                    isSecret: true,
-                  ),
-                )
-                .toList();
-            errors.addAll(obfuscatedErrors);
-          } else {
-            errors.addAll(res.errors);
-          }
+        } else if (res is FlodFailure<T>) {
+          // ЯВНО добавили <T> здесь
+          // Теперь Dart гарантирует Smart Cast и видит поле `.errors`
+          errors.addAll(res.errors);
           outputList.add(item);
         }
       } else {
@@ -130,17 +159,16 @@ class ListValidator extends Validator<List<dynamic>>
       }
     }
 
-    // Проверяем уникальность ТОЛЬКО если дочерние элементы успешно свалидировались.
-    // Это исключает каскад ложных ошибок дубликатов на невалидных данных.
+    // 5. Проверяем уникальность ТОЛЬКО если дочерние элементы успешно свалидировались.
     if (isUnique && errors.isEmpty) {
-      final seen = <dynamic>{};
+      final seen = <T>{};
       for (int i = 0; i < outputList.length; i++) {
         if (!seen.add(outputList[i])) {
           errors.add(
             FlodError(
-              path.append(i),
-              'Duplicate item found at index $i',
-              'unique_items',
+              path: path.append(i),
+              code: FlodErrorCodes.listUniqueItems,
+              params: {'index': i},
               value: outputList[i],
               isSecret: isSecret,
             ),
@@ -150,7 +178,7 @@ class ListValidator extends Validator<List<dynamic>>
     }
 
     return errors.isEmpty
-        ? FlodSuccess<List<dynamic>>(outputList)
-        : FlodFailure<List<dynamic>>(errors);
+        ? FlodSuccess<List<T>>(outputList)
+        : FlodFailure<List<T>>(errors);
   }
 }

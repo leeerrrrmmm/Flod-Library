@@ -1,14 +1,11 @@
+import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/rules/regexp/custom_regexp_rule.dart';
 import 'package:flod/src/rules/regexp/regex_rule.dart';
 import 'package:flod/src/rules/string/base_string_rule.dart';
+import 'package:flod/src/rules/string/custom_string_rule.dart';
 import 'package:flod/src/rules/string/fixed_length_rule.dart';
 import 'package:flod/src/rules/string/max_length_rule.dart';
 import 'package:flod/src/rules/string/min_length_rule.dart';
-import 'package:flod/src/types/path.dart';
 
 class StringValidator extends Validator<String> with Transformable<String> {
   final List<BaseStringRule> rules;
@@ -16,7 +13,6 @@ class StringValidator extends Validator<String> with Transformable<String> {
   @override
   final List<Transformer<String>> transformers;
 
-  // Теперь конструктор может быть полностью const, что идеально для производительности
   const StringValidator([
     this.rules = const [],
     this.transformers = const [],
@@ -26,22 +22,9 @@ class StringValidator extends Validator<String> with Transformable<String> {
   @override
   StringValidator secret() => copyWith(isSecret: true);
 
-  // =========================================================================
-  // ВСТРОЕННЫЕ УТИЛИТЫ НОРМАЛИЗАЦИИ (БЛОК 5.2 DONE)
-  // =========================================================================
-
-  /// Удаляет пробелы по краям строки перед валидацией
   StringValidator trim() => _copyWithTransform((v) => v.trim());
-
-  /// Приводит строку к нижнему регистру перед валидацией
   StringValidator toLowerCase() => _copyWithTransform((v) => v.toLowerCase());
-
-  /// Приводит строку к верхнему регистру перед валидацией
   StringValidator toUpperCase() => _copyWithTransform((v) => v.toUpperCase());
-
-  // =========================================================================
-  // МЕНЕДЖМЕНТ СОСТОЯНИЯ СХЕМЫ
-  // =========================================================================
 
   StringValidator copyWith({
     List<BaseStringRule>? rules,
@@ -59,96 +42,133 @@ class StringValidator extends Validator<String> with Transformable<String> {
     return copyWith(transformers: [...transformers, transform]);
   }
 
-  // =========================================================================
-  // ПРАВИЛА ВАЛИДАЦИИ
-  // =========================================================================
-
-  StringValidator min(int length, String message, String code) {
+  StringValidator min(int length, {String? code}) {
     return copyWith(
       rules: [
         ...rules,
-        MinLengthRule(length, message: message, code: code),
+        MinLengthRule(length, code: code ?? FlodErrorCodes.stringMin),
       ],
     );
   }
 
-  StringValidator max(int length, String message, String code) {
-    return copyWith(rules: [...rules, MaxLengthRule(length, message, code)]);
-  }
-
-  StringValidator regex(RegExp pattern, String message, String code) {
+  StringValidator max(int length, {String? code}) {
     return copyWith(
       rules: [
         ...rules,
-        RegexRule(pattern, message: message, code: code),
+        MaxLengthRule(length, code: code ?? FlodErrorCodes.stringMax),
       ],
     );
   }
+
+  StringValidator fixedLength(int length, {String? code}) {
+    return copyWith(
+      rules: [
+        ...rules,
+        FixedLengthRule(length, code: code ?? FlodErrorCodes.stringFixedLength),
+      ],
+    );
+  }
+
+  StringValidator regex(RegExp pattern, {String? code}) {
+    return copyWith(
+      rules: [
+        ...rules,
+        RegexRule(pattern, code: code ?? FlodErrorCodes.stringRegex),
+      ],
+    );
+  }
+
+  StringValidator email({String? code}) => regex(
+    RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$'),
+    code: code ?? FlodErrorCodes.stringEmail,
+  );
+
+  StringValidator creditCard({String? code}) => custom((v) {
+    int sum = 0;
+    bool alternate = false;
+    for (int i = v.length - 1; i >= 0; i--) {
+      int n = int.tryParse(v[i]) ?? 0;
+      if (alternate) {
+        n *= 2;
+        if (n > 9) n = (n % 10) + 1;
+      }
+      sum += n;
+      alternate = !alternate;
+    }
+    return sum % 10 == 0;
+  }, code: code ?? FlodErrorCodes.stringCreditCard);
+
+  StringValidator minUppercase(int limit, {String? code}) => custom(
+    (v) => v.replaceAll(RegExp(r'[^A-Z]'), '').length >= limit,
+    code: code ?? FlodErrorCodes.stringMinUppercase,
+    metaParams: {'limit': limit},
+  );
+
+  StringValidator minNumbers(int limit, {String? code}) => custom(
+    (v) => v.replaceAll(RegExp(r'[^0-9]'), '').length >= limit,
+    code: code ?? FlodErrorCodes.stringMinNumbers,
+    metaParams: {'limit': limit},
+  );
+
+  StringValidator minSymbols(int limit, {String? code}) => custom(
+    (v) => v.replaceAll(RegExp(r'[A-Za-z0-9]'), '').length >= limit,
+    code: code ?? FlodErrorCodes.stringMinSymbols,
+    metaParams: {'limit': limit},
+  );
 
   StringValidator custom(
     bool Function(String value) predicate, {
-    required String message,
     required String code,
+    Map<String, dynamic>? metaParams,
   }) {
     return copyWith(
       rules: [
         ...rules,
-        CustomRegexpRule(predicate, message: message, code: code),
+        CustomStringRule(predicate, code: code, metaParams: metaParams),
       ],
     );
   }
-
-  StringValidator fixedLength(int length, String message, String code) {
-    return copyWith(
-      rules: [
-        ...rules,
-        FixedLengthRule(length, message: message, code: code),
-      ],
-    );
-  }
-
-  // =========================================================================
-  // ЯДРО ВАЛИДАЦИИ
-  // =========================================================================
 
   @override
-  ValidationResult<String> validate(dynamic value, {Path path = const []}) {
-    // 1. Проверка типа (Guard Clause) ДО каких-либо мутаций
+  ParseResult<String> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly = false,
+  }) {
     if (value is! String) {
-      return FlodFailure([
+      return FlodFailure<String>([
         FlodError(
-          path,
-          'Expected a string',
-          'invalid_type',
-          value: value,
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: {
+            'expected': 'String',
+            'actual': value == null ? 'null' : value.runtimeType.toString(),
+          },
+          value: isSecret ? null : value,
           isSecret: isSecret,
         ),
       ]);
     }
 
-    // 2. EXECUTION ORDER (5.3): Сначала полностью трансформируем данные
-    final dynamic rawTransformed = applyTransforms(value);
-    final String transformed = rawTransformed as String;
-
+    final String transformed = applyTransforms(value, path);
     final errors = <FlodError>[];
 
-    // 3. Валидируем уже очищенную, нормализованную строку
     for (final rule in rules) {
-      final result = rule.check(transformed);
-
-      if (!result) {
+      if (!rule.check(transformed)) {
         errors.add(
           FlodError(
-            path,
-            rule.message,
-            rule.code,
-            value: transformed, // В логи летит уже трансформированное значение!
+            path: path,
+            code: rule.code,
+            params: rule.params,
+            value: isSecret ? null : transformed,
             isSecret: isSecret,
           ),
         );
       }
     }
 
-    return errors.isEmpty ? FlodSuccess(transformed) : FlodFailure(errors);
+    return errors.isEmpty
+        ? FlodSuccess<String>(transformed)
+        : FlodFailure<String>(errors);
   }
 }

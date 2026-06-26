@@ -1,14 +1,15 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 void main() {
   print("=================================================================");
   print("          FLOD PRIVACY & HIGH-STRESS PERFORMANCE MATRIX          ");
   print("=================================================================\n");
 
-  /// Главный хелпер для запуска сценариев валидации.
-  /// Проверяет три состояния: успех на валидных данных, публичный лог ошибок
-  /// и автоматическое маскирование [HIDDEN] для приватных (.secret()) валидаторов.
-  /// Также проводит автоматический аудит безопасности на предмет утечки данных.
+  // / Главный хелпер для запуска сценариев валидации.
+  // / Проверяет три состояния: успех на валидных данных, публичный лог ошибок
+  // / и автоматическое маскирование [HIDDEN] для приватных (.secret()) валидаторов.
+  // / Также проводит автоматический аудит безопасности на предмет утечки данных.
   void runScenario({
     required String name,
     required Validator publicValidator,
@@ -20,26 +21,26 @@ void main() {
 
     // 1. ТЕСТ: ПРАВИЛЬНЫЕ ДАННЫЕ (Сложные граничные структуры)
     final resValid = publicValidator.safeParse(validValue);
-    if (resValid.success) {
+    if (resValid is FlodSuccess) {
       print(
-        "   ✅ SUCCESS -> Вход проверен | Выход: ${resValid.data} [Type: ${resValid.data.runtimeType}]",
+        "   ✅ SUCCESS -> Вход проверен | Выход: ${(resValid).data} [Type: ${(resValid).data.runtimeType}]",
       );
     } else {
       print("   🚨 CRITICAL FAIL -> Ожидался успех, но схема упала!");
       print(
-        "                       Ошибки: ${resValid.errors?.map((e) => '[${e.path.toReadable()}] ${e.message}').join(', ')}",
+        "                       Ошибки: ${(resValid as FlodFailure).errors.map((e) => '[${e.path.toReadable()}] ${e.params}').join(', ')}",
       );
     }
 
     // 2. ТЕСТ: НЕПРАВИЛЬНЫЕ ДАННЫЕ (Публичный лог)
     final resInvalid = publicValidator.safeParse(invalidValue);
-    if (!resInvalid.success) {
+    if (resInvalid is FlodFailure) {
       print(
-        "   ❌ PUBLIC FAIL -> Обнаружено ошибок: ${resInvalid.errors!.length}",
+        "   ❌ PUBLIC FAIL -> Обнаружено ошибок: ${(resInvalid).errors.length}",
       );
-      for (final err in resInvalid.errors!) {
+      for (final err in resInvalid.errors) {
         print(
-          "         ↳ Path: '${err.path.toReadable()}' | Code: ${err.code} | Message: ${err.message} | Value: ${err.rejectedValue}",
+          "         ↳ Path: '${err.path.toReadable()}' | Code: ${err.code} | Message: ${err.params} | Value: ${err.value}",
         );
       }
     } else {
@@ -50,20 +51,20 @@ void main() {
 
     // 3. ТЕСТ: МАСКИРОВАНИЕ ПРИВАТНОСТИ (.secret) + Авто-аудит безопасности
     final resSecret = secretValidator.safeParse(invalidValue);
-    if (!resSecret.success) {
-      print("   🔒 SECRET FAIL -> Скрыто ошибок: ${resSecret.errors!.length}");
+    if (resSecret is FlodFailure) {
+      print("   🔒 SECRET FAIL -> Скрыто ошибок: ${resSecret.errors.length}");
       bool leakDetected = false;
-      for (final err in resSecret.errors!) {
-        final valString = err.rejectedValue.toString();
+      for (final err in (resSecret).errors) {
+        final valString = err.value.toString();
         // Если секретный валидатор вернул исходное сырое значение вместо маски — это утечка
-        if (err.rejectedValue != null &&
+        if (err.value != null &&
             valString != "[HIDDEN]" &&
             !valString.contains("null") &&
-            err.rejectedValue) {
+            err.value) {
           leakDetected = true;
         }
         print(
-          "         ↳ Path: '${err.path}' | Code: ${err.code} | Masked Value: ${err.rejectedValue}",
+          "         ↳ Path: '${err.path.toReadable()}' | Code: ${err.code} | Masked Value: ${err.value}",
         );
       }
       if (leakDetected) {
@@ -104,8 +105,10 @@ void main() {
       print(
         "   🚨 CRITICAL FAIL -> parse() не выбросил исключение при неверном типе ($input)!",
       );
-    } catch (e) {
+    } on ValidationException catch (e) {
       print("   ✅ SUCCESS -> parse() корректно выбросил исключение: $e");
+    } catch (e) {
+      print("   🚨 FATAL -> Выброшено непредвиденное исключение: $e");
     }
   }
   print("");
@@ -117,11 +120,9 @@ void main() {
 
   runScenario(
     name: "2.1. .nullable() Fallthrough (Messy Space Strings)",
-    publicValidator: Flod.string()
-        .min(5, "Min length error", "min_length_error")
-        .nullable(),
+    publicValidator: Flod.string().min(5, code: "min_length_error").nullable(),
     secretValidator: Flod.string()
-        .min(5, "Min length error", "min_length_error [SECRET]")
+        .min(5, code: "min_length_error [SECRET]")
         .nullable()
         .secret(),
     validValue: null,
@@ -299,12 +300,11 @@ void main() {
     name: "5.3.1. Execution Order (Multi-stage Pipeline Pre-validation Rules)",
     publicValidator: Flod.string().trim().fixedLength(
       3,
-      "Fixed length error",
-      "fixed_length_error",
+      code: "fixed_length_error",
     ),
     secretValidator: Flod.string()
         .trim()
-        .fixedLength(3, "Fixed length error", "fixed_length_error [SECRET]")
+        .fixedLength(3, code: "fixed_length_error [SECRET]")
         .secret(),
     validValue: "\n\t EUR \r ", // Будет очищено до "EUR" (длина 3)
     invalidValue: " \t LONGRUNNINGSTRINGTHATFAILSTHEFIXEDLENGTHCHECK \n",
@@ -400,11 +400,7 @@ void main() {
       }),
       Flod.object({
         "kind": Flod.literal("crypto"),
-        "wallet": Flod.string().fixedLength(
-          42,
-          "Invalid wallet length",
-          "invalid_wallet_length",
-        ),
+        "wallet": Flod.string().fixedLength(42, code: "invalid_wallet_length"),
       }),
     ]).discriminatedBy("kind"),
     secretValidator: Flod.union([
@@ -418,11 +414,7 @@ void main() {
       }),
       Flod.object({
         "kind": Flod.literal("crypto"),
-        "wallet": Flod.string().fixedLength(
-          42,
-          "Invalid wallet length",
-          "invalid_wallet_length",
-        ),
+        "wallet": Flod.string().fixedLength(42, code: "invalid_wallet_length"),
       }),
     ]).discriminatedBy("kind").secret(),
     validValue: {
@@ -507,25 +499,25 @@ void main() {
     },
   );
 
-  // runScenario(
-  //   name: "8.2. Type Mismatch Explosion (Multi-Layer Poisoning Matrix)",
-  //   publicValidator: Flod.object({
-  //     "matrix": Flod.list(schema: Flod.int()),
-  //     "system_flags": Flod.object({"active": Flod.bool()}),
-  //   }),
-  //   secretValidator: Flod.object({
-  //     "matrix": Flod.list(schema: Flod.int()),
-  //     "system_flags": Flod.object({"active": Flod.bool()}),
-  //   }).secret(),
-  //   validValue: {
-  //     "matrix": [1, 2, 3],
-  //     "system_flags": {"active": true},
-  //   },
-  //   invalidValue: {
-  //     "matrix": ["string_instead_of_int", double.nan, false],
-  //     "system_flags": "not_even_a_map_structure",
-  //   },
-  // );
+  runScenario(
+    name: "8.2. Type Mismatch Explosion (Multi-Layer Poisoning Matrix)",
+    publicValidator: Flod.object({
+      "matrix": Flod.list(schema: Flod.int()),
+      "system_flags": Flod.object({"active": Flod.bool()}),
+    }),
+    secretValidator: Flod.object({
+      "matrix": Flod.list(schema: Flod.int()),
+      "system_flags": Flod.object({"active": Flod.bool()}),
+    }).secret(),
+    validValue: {
+      "matrix": [1, 2, 3],
+      "system_flags": {"active": true},
+    },
+    invalidValue: {
+      "matrix": ["string_instead_of_int", double.nan, false],
+      "system_flags": "not_even_a_map_structure",
+    },
+  );
 
   // =========================================================================
   // СЕКЦИЯ 19: NUMBER VALIDATOR SUITE
@@ -647,11 +639,10 @@ void main() {
     name: "20.6. .fixedLength() Control (Zero Length Attack Vector)",
     publicValidator: Flod.string().fixedLength(
       3,
-      "Fixed length error",
-      "fixed_length_error",
+      code: FlodErrorCodes.stringFixedLength,
     ),
     secretValidator: Flod.string()
-        .fixedLength(3, "Fixed length error", "fixed_length_error [SECRET]")
+        .fixedLength(3, code: FlodErrorCodes.stringFixedLength)
         .secret(),
     validValue: "USD",
     invalidValue: "", // Пустая строка для падения проверки фиксированной длины
@@ -669,7 +660,7 @@ void main() {
   runScenario(
     name: "20.8. CVV Domain Logic (Alphabetical Noise Injection)",
     publicValidator: Flod.string().cvv(),
-    secretValidator: Flod.string().creditCard().secret(),
+    secretValidator: Flod.string().cvv().secret(),
     validValue: "999",
     invalidValue: "99A", // Алфавитный символ вместо числового защитного кода
   );
@@ -678,3 +669,408 @@ void main() {
   print("    COMPLETE HIGH-STRESS VERIFICATION MATRIX RUN FINISHED        ");
   print("=================================================================");
 }
+
+// import 'package:flod/flod.dart';
+// import 'package:flod/src/validators/exception_validator/validator_exception.dart';
+
+// // =========================================================================
+// // ТОЧКА РАСШИРЕНИЯ ПОЛЬЗОВАТЕЛЯ: СТОРОННИЕ КОМПИЛЯТОРЫ ЛОКАЛИЗАЦИИ (Пункт 10)
+// // =========================================================================
+
+// // Инициализация украинской локализации через вашу фабрику:
+// final ukrainianResolver = Flod.i18n((code, params) {
+//   switch (code) {
+//     case FlodErrorCodes.required:
+//       return 'Це поле є обовʼязковим';
+//     case FlodErrorCodes.invalidType:
+//       return 'Очікуваний тип: ${params['expected']}, отриманий: ${params['actual']}.';
+//     case FlodErrorCodes.objectStrict:
+//       return 'Виявлені неприпустимі ключі: ${params['key']}.';
+//     case FlodErrorCodes.stringMin:
+//       return 'Мінімальна довжина: ${params['limit']} символів.';
+//     case FlodErrorCodes.numberMin:
+//       return 'Значення має бути >= ${params['limit']}.';
+//     case FlodErrorCodes.listMaxItems:
+//       return 'Список може містити максимум ${params['limit']} елементів.';
+//     case FlodErrorCodes.stringEmail:
+//       return 'Невірний формат email.';
+//     case FlodErrorCodes.stringCreditCard:
+//       return 'Невірний номер кредитної картки.';
+//     case FlodErrorCodes.stringMinUppercase:
+//       return 'Потрібно мінімум ${params['limit']} великих літер.';
+//     case FlodErrorCodes.stringMinNumbers:
+//       return 'Потрібно мінімум ${params['limit']} цифр.';
+//     case FlodErrorCodes.stringMinSymbols:
+//       return 'Потрібно мінімум ${params['limit']} спецсимволів.';
+//     case FlodErrorCodes.numberMultipleOf:
+//       return 'Число має бути кратним ${params['limit']}.';
+//     case FlodErrorCodes.union:
+//       return 'Помилка [$code]';
+//     default:
+//       return 'Помилка [$code]';
+//   }
+// });
+
+// final germanResolver = Flod.i18n((code, params) {
+//   switch (code) {
+//     case 'required':
+//       return 'Dieses Feld ist obligatorisch.';
+//     case 'invalid_type':
+//       return 'Erwartet: ${params['expected']}, erhalten: ${params['actual']}.';
+//     case 'object.strict':
+//       return 'Unzulässiger Schlüssel: ${params['key']}.';
+//     case FlodErrorCodes.union:
+//       return 'Daten entsprechen keinem erlaubten Typ.';
+//     // Strings
+//     case FlodErrorCodes.stringMin:
+//       return 'Mindestlänge: ${params['limit']} Zeichen.';
+//     case FlodErrorCodes.stringFixedLength:
+//       return 'Länge muss exakt ${params['limit']} Zeichen sein.';
+//     case FlodErrorCodes.stringEmail:
+//       return 'Ungültiges E-Mail-Format.';
+//     case FlodErrorCodes.stringUrl:
+//       return 'Ungültige URL-Struktur.';
+//     case FlodErrorCodes.stringUuid:
+//       return 'Ungültige UUID v4.';
+//     case FlodErrorCodes.stringCreditCard:
+//       return 'Ungültige Kreditkarte (Luhn-Fehler).';
+//     case FlodErrorCodes.stringCvv:
+//       return 'Ungültiger CVV-Code.';
+//     // Password Policies
+//     case FlodErrorCodes.stringMinUppercase:
+//       return 'Mindestens ${params['limit']} Großbuchstaben erforderlich.';
+//     case FlodErrorCodes.stringMinNumbers:
+//       return 'Mindestens ${params['limit']} Ziffern erforderlich.';
+//     case FlodErrorCodes.stringMinSymbols:
+//       return 'Mindestens ${params['limit']} Sonderzeichen erforderlich.';
+//     // Numbers
+//     case FlodErrorCodes.numberMin:
+//       return 'Wert muss >= ${params['limit']} sein.';
+//     case FlodErrorCodes.numberPositive:
+//       return 'Zahl muss positiv sein.';
+//     case FlodErrorCodes.numberNegative:
+//       return 'Zahl muss negativ sein.';
+//     case FlodErrorCodes.numberMultipleOf:
+//       return 'Zahl muss ein Vielfaches von ${params['limit']} sein.';
+//     // Lists
+//     case FlodErrorCodes.listMinItems:
+//       return 'Liste muss mindestens ${params['limit']} Elemente enthalten.';
+//     case FlodErrorCodes.listMaxItems:
+//       return 'Liste darf maximal ${params['limit']} Elemente enthalten.';
+//     case FlodErrorCodes.listUniqueItems:
+//       return 'Alle Elemente in der Liste müssen eindeutig sein.';
+//     default:
+//       return 'Validierungsfehler (Code: $code).';
+//   }
+// });
+
+// void main() {
+//   print("=================================================================");
+//   print("        FLOD EXTRA-HARDCORE COMPREHENSIVE STRESS ENGINE          ");
+//   print("=================================================================\n");
+//   final ukrResolver = ukrainianResolver;
+//   final gerResolver = germanResolver;
+
+//   /// Универсальный жесткий исполнитель сценариев
+//   void executeStressScenario({
+//     required String section,
+//     required String description,
+//     required Validator validator,
+//     required dynamic validPayload,
+//     required dynamic toxicPayload,
+//   }) {
+//     print("-----------------------------------------------------------------");
+//     print("🔬 [SECTION $section] $description");
+//     print("-----------------------------------------------------------------");
+
+//     // 1. ТЕСТ: safeParse() И УСПЕХ (Пункт 1.2)
+//     final successResult = validator.safeParse(validPayload);
+//     if (successResult is FlodSuccess) {
+//       print("   ✅ [safeParse: SUCCESS] Данные успешно прошли сито Flod.");
+//     } else {
+//       print(
+//         "   🚨 [safeParse: CRITICAL FAIL] Валидные данные были заблокированы!",
+//       );
+//       final errs = (successResult as FlodFailure).errors;
+//       for (var e in errs) {
+//         print(
+//           "      ↳ Path: '${e.path.toReadable()}' | Code: ${e.code} | Value: ${e.value}",
+//         );
+//       }
+//     }
+
+//     // 2. ТЕСТ: safeParse() И АГРЕССИВНОЕ ПАДЕНИЕ (Пункты 9, 13, 15, 22)
+//     final failureResult = validator.safeParse(toxicPayload);
+//     if (failureResult is FlodFailure) {
+//       print(
+//         "   ❌ [safeParse: TOXIC DATA CAUGHT] Словлено ошибок: ${failureResult.errors.length}",
+//       );
+
+//       // Проверка маскирования логов и уязвимостей (Пункт 22)
+//       bool privacyLeak = false;
+//       for (final err in failureResult.errors) {
+//         final valStr = err.value.toString();
+//         // Защитный инвариант: если в ошибках просочилось исходное токсичное значение,
+//         // но при этом поле должно быть скрыто (тестируем логику .secret())
+//         if (err.value != null &&
+//             valStr != "[HIDDEN]" &&
+//             !valStr.contains("null") &&
+//             valStr.contains("toxic")) {
+//           privacyLeak = true;
+//         }
+//       }
+
+//       if (privacyLeak) {
+//         print(
+//           "   🚨 [SECURITY BREACH] ОБНАРУЖЕНА УТЕЧКА ДАННЫХ В ОБЪЕКТЕ ОШИБКИ!",
+//         );
+//       } else {
+//         print("   🛡️ [PRIVACY VERDICT] Конфиденциальность данных защищена.");
+//       }
+
+//       // МАКСИМАЛЬНО ЖЕСТКИЙ I18N ТЕСТ НА 2-Х ЯЗЫКАХ (Пункт 10)
+//       final ukrMap = failureResult.getGroupedFieldsMap(
+//         customResolver: ukrResolver,
+//       );
+//       final gerMap = failureResult.getGroupedFieldsMap(
+//         customResolver: gerResolver,
+//       );
+
+//       print("\n         🇺🇦 [UA Localization - Grouped Multi-Errors]:");
+//       ukrMap.forEach((path, msgs) {
+//         print("            ↳ Поле '$path': ${msgs.join(' И ')}");
+//       });
+
+//       print("         🇩🇪 [DE Localization - Grouped Multi-Errors]:");
+//       gerMap.forEach((path, msgs) {
+//         print("            ↳ Feld '$path': ${msgs.join(' UND ')}");
+//       });
+//       print("");
+//     } else {
+//       print(
+//         "   🚨 [CRITICAL INFRASTRUCTURE FAIL] Валидатор пропустил токсичный payload!",
+//       );
+//     }
+//   }
+
+//   // =========================================================================
+//   // СЕКЦИЯ 1: PARSE API & EXCEPTIONS (Пункты 1.1, 1.2)
+//   // =========================================================================
+//   print("=== СЕКЦИЯ 1: PARSE API СИНХРОННЫЕ ИСКЛЮЧЕНИЯ ===");
+//   try {
+//     Flod.int().parse("строка_вместо_числа");
+//     print("   🚨 FAIL: parse() пропустил ошибку без Exception!");
+//   } on ValidationException catch (e) {
+//     print("   ✅ SUCCESS: parse() выбросил ValidationException: $e");
+//   }
+//   print("");
+
+//   // =========================================================================
+//   // СЕКЦИЯ 2: NULLABLE & OPTIONAL DECORATORS (Пункты 2.1, 2.2)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "2",
+//     description: "Nullable & Optional Развязка с грязными строками пробелов",
+//     validator: Flod.string()
+//         .min(5, code: FlodErrorCodes.stringMin)
+//         .nullable()
+//         .optional(),
+//     validPayload: null, // Допустимо из-за nullable
+//     toxicPayload: "   ", // Ошибка: длина меньше 5
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 3 & 13: OBJECT MODES & DEEP AGGREGATION (Пункты 3.1, 3.2, 3.3, 13)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "3 & 13",
+//     description:
+//         "Strict Mode, Глубокая вложенность путей и инъекция ключей (__proto__)",
+//     validator: Flod.object({
+//       "user": Flod.object({
+//         "profile": Flod.object({"age": Flod.int().min(18)}).strict(),
+//       }),
+//     }),
+//     validPayload: {
+//       "user": {
+//         "profile": {"age": 25},
+//       },
+//     },
+//     toxicPayload: {
+//       "user": {
+//         "profile": {
+//           "age": 12, // Ошибка 1: Возраст меньше 18
+//           "__proto__":
+//               "malicious_pollution", // Ошибка 2: Лишний ключ в strict() режиме
+//           "hacker_payload": true,
+//         },
+//       },
+//     },
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 4: LIST / ARRAY SCHEMA CONSTRAINTS (Пункты 4.1, 4.2, 4.3)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "4",
+//     description:
+//         "Коллекции: Ограничения размера и мутанты уникальности элементов",
+//     validator: Flod.list(
+//       schema: Flod.string().trim(),
+//     ).minItems(2).maxItems(4).uniqueItems(),
+//     validPayload: ["alpha", "beta", "gamma"],
+//     toxicPayload: [
+//       "dart",
+//       "  dart  ", // После trim() превратится в "dart" -> дубликат (uniqueItems fail)
+//       "flutter",
+//       "firebase",
+//       "extra_item_overflow", // Превышение maxItems (5 элементов вместо макс 4)
+//     ],
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 5: TRANSFORM PIPELINE (Пункты 5.1, 5.2, 5.3)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "5",
+//     description: "Пайплайн трансформаций: Выполнение строго ДО валидации чисел",
+//     validator: Flod.string()
+//         .trim()
+//         .toLowerCase()
+//         .transform((v) => int.tryParse(v) ?? 0) // String -> int
+//         .transform((nums) => nums * 2)
+//         .transform(
+//           (v) => Flod.int().min(50).validate(v),
+//         ), // Кастомный или встроенный pipe-проверщик лимита
+//     validPayload: "   30   ", // "30" -> 30 -> 60 (60 >= 50: Успех)
+//     toxicPayload: "  15  ", // "15" -> 15 -> 30 (30 < 50: Ошибка)
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 6: UNION TYPES WITH O(1) DISCRIMINATION (Пункты 6.1, 6.2)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "6",
+//     description:
+//         "Discriminated Union по полю 'type' с глубоким падением внутренней схемы",
+//     validator: Flod.union([
+//       Flod.object({
+//         "type": Flod.literal("email_service"),
+//         "meta": Flod.object({"email": Flod.string().email()}),
+//       }),
+//       Flod.object({
+//         "type": Flod.literal("phone_service"),
+//         "meta": Flod.object({"phone": Flod.string().phoneNumber()}),
+//       }),
+//     ]).discriminatedBy("type"),
+//     validPayload: {
+//       "type": "email_service",
+//       "meta": {"email": "dev@flod.io"},
+//     },
+//     toxicPayload: {
+//       "type": "email_service",
+//       "meta": {
+//         "email": "NOT_A_VALID_EMAIL_XSS_ATTACK",
+//       }, // Падение внутренней структуры
+//     },
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 7: DEFAULT VALUES FALLBACK (Пункты 7.1, 7.2)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "7",
+//     description:
+//         "Заполнение дефолтов при отсутствии ключей с последующей математикой",
+//     validator: Flod.object({
+//       "timeout": Flod.int().defaultValue(100).transform((v) => v + 50),
+//     }),
+//     validPayload: {}, // Ключа нет -> 100 -> 150 (Успех)
+//     toxicPayload: {
+//       "timeout": "invalid_type_string",
+//     }, // Ошибка типа до дефолта
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 8: ABORT EARLY ACTIVE BREAK (Пункты 8.1, 8.2)
+//   // =========================================================================
+//   // Создаем валидатор с жестким стопом на первой ошибке
+//   final abortEarlyValidator = Flod.object({
+//     "fail_one": Flod.int().positive(),
+//     "fail_two": Flod.string().email(),
+//     "fail_three": Flod.string().uuid(),
+//   }).stopOnFirstError(); // true
+
+//   executeStressScenario(
+//     section: "8",
+//     description:
+//         "AbortEarly Switch: Сбор ровно 1 ошибки вместо каскада трех падений",
+//     validator: abortEarlyValidator,
+//     validPayload: {
+//       "fail_one": 10,
+//       "fail_two": "test@test.com",
+//       "fail_three": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+//     },
+//     toxicPayload: {
+//       "fail_one": -500, // Падение тут! Цикл обязан сделать break!
+//       "fail_two": "invalid_email",
+//       "fail_three": "invalid_uuid",
+//     },
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 19 & 20: NUMBER VALIDATOR & DOMAIN STRINGS (Пункты 19, 20)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "19 & 20",
+//     description:
+//         "Комплексные доменные проверки: Пароли, Кредитные карты и Кратность",
+//     validator: Flod.object({
+//       "multiple": Flod.int().multipleOf(7),
+//       "card": Flod.string().creditCard(),
+//       "password": Flod.string()
+//           .minUppercase(2)
+//           .minNumbers(2)
+//           .minSymbols(2)
+//           .secret(),
+//     }),
+//     validPayload: {
+//       "multiple": 49,
+//       "card": "4111111111111111",
+//       "password": "AA11!!",
+//     },
+//     toxicPayload: {
+//       "multiple": 50, // Ошибка кратности
+//       "card": "4111111111111112", // Ошибка Луна
+//       "password": "weak", // Сразу 3 ошибки пароля (Multi-Error на одном поле)
+//     },
+//   );
+
+//   // =========================================================================
+//   // СЕКЦИЯ 22: LOG PRIVACY & PROTECTION (.secret()) (Пункт 22)
+//   // =========================================================================
+//   executeStressScenario(
+//     section: "22",
+//     description:
+//         "Log Privacy: Полное маскирование секретного токена в объекте ошибки",
+//     validator: Flod.object({
+//       "public_id": Flod.string(),
+//       "secure_token": Flod.string()
+//           .min(32, code: FlodErrorCodes.stringMin)
+//           .secret(), // Скрываем от логов!
+//     }),
+//     validPayload: {
+//       "public_id": "user_123",
+//       "secure_token": "super_long_secret_hash_token_string_32",
+//     },
+//     toxicPayload: {
+//       "public_id": "user_123",
+//       "secure_token":
+//           "toxic_short", // Ошибка длины, но значение обязано скрыться!
+//     },
+//   );
+
+//   print("=================================================================");
+//   print("         ALL STRESS TRIALS COMPLETED WITH 100% SUCCESS           ");
+//   print("=================================================================");
+// }

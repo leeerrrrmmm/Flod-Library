@@ -1,15 +1,51 @@
-import 'package:flod/src/error.dart';
+// lib/src/res/parse_result.dart
+import 'package:flod/flod.dart';
 
-class ParseResult<T> {
-  final T? data;
-  final List<FlodError>? errors;
-  final bool success;
+sealed class ParseResult<Out> {
+  const ParseResult();
+}
 
-  ParseResult._internal({this.data, this.errors, required this.success});
+class FlodSuccess<Out> extends ParseResult<Out> {
+  final Out data;
+  const FlodSuccess(this.data);
+}
 
-  factory ParseResult.success(T data) =>
-      ParseResult._internal(data: data, success: true);
+class FlodFailure<Out> extends ParseResult<Out> {
+  final List<FlodError> errors;
+  const FlodFailure(this.errors);
 
-  factory ParseResult.failure(List<FlodError> errors) =>
-      ParseResult._internal(errors: errors, success: false);
+  /// Возвращает список человекочитаемых сообщений с применением резолвера.
+  /// Можно передать локальный резолвер, иначе возьмется глобальный.
+  List<String> getMessages({FlodI18nResolver? customResolver}) {
+    final resolver = customResolver ?? FlodConfig.errorResolver;
+    return errors.map((err) => resolver.translate(err)).toList();
+  }
+
+  /// Карта ошибок вида {"user.age": "Value must be greater than or equal to 18"}
+  /// Идеально для Flutter Form / Form Validation Map.
+  Map<String, String> getFieldsMap({FlodI18nResolver? customResolver}) {
+    final resolver = customResolver ?? FlodConfig.errorResolver;
+    final Map<String, String> map = {};
+    for (final error in errors) {
+      // Ипользуем уже реализованный error.pathContext или кэшированный путь
+      map[error.path.toReadable()] = resolver.translate(error);
+    }
+    return map;
+  }
+
+  /// Возвращает карту, группирующую ВСЕ локализованные ошибки для каждого поля.
+  /// Идеально для продвинутых UI-компонентов с поддержкой Multi-Error
+  Map<String, List<String>> getGroupedFieldsMap({
+    FlodI18nResolver? customResolver,
+  }) {
+    final resolver = customResolver ?? FlodConfig.errorResolver;
+    final Map<String, List<String>> map = {};
+
+    for (final error in errors) {
+      final pathKey = error.path.toReadable();
+      final translatedMessage = resolver.translate(error);
+      map.putIfAbsent(pathKey, () => []).add(translatedMessage);
+    }
+    return map;
+  }
 }

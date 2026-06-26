@@ -1,18 +1,13 @@
 import 'package:flod/src/rules/string/base_string_rule.dart';
 
-// lib/src/rules/string/min_length_rule.dart
 class MinLengthRule extends BaseStringRule {
-  final int min;
+  final int length;
 
-  MinLengthRule(this.min, {required super.message, required super.code});
+  MinLengthRule(this.length, {required super.code});
 
   @override
-  bool check(String value) => value.length >= min;
-}
+  bool check(String value) => value.length >= length;
 
-// ValidationResult<String> validate(String value, {Path path = const []}) {
-//   if (value.length < min) {
-//     return FlodFailure([FlodError(path, message, code)]);
-//   }
-//   return FlodSuccess(value);
-// }
+  @override
+  Map<String, dynamic> get params => {'limit': length};
+}

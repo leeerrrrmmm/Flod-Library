@@ -3,39 +3,29 @@ import 'package:flod/src/core/decorator/default_decorator.dart';
 import 'package:flod/src/rules/regexp/regex_rule.dart';
 import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
-// =========================================================================
-// 1. БАЗОВЫЕ МЕТОДЫ (Доступны ВСЕМ валидаторам)
-// =========================================================================
-
 extension DefaultExtension<T> on Validator<T> {
   DefaultDecorator<T> defaultValue(T value) => DefaultDecorator<T>(this, value);
 }
 
 extension ValidatorExtensions<T> on Validator<T> {
-  /// Безопасный парсинг без выбрасывания исключений (возвращает ParseResult)
   ParseResult<T> safeParse(dynamic value) {
     final result = validate(value);
-    if (result.isFailure) {
-      return ParseResult.failure(result.errors);
+    if (result is FlodFailure<T>) {
+      return FlodFailure<T>(result.errors);
     }
-    return ParseResult.success(result.data);
+    return FlodSuccess<T>((result as FlodSuccess<T>).data);
   }
 
-  /// Жесткий парсинг: возвращает чистые данные T или бросает ValidationException
   T parse(dynamic value) {
     final result = validate(value);
-    if (result.isFailure) {
+    if (result is FlodFailure<T>) {
       throw ValidationException(result.errors);
     }
-    return result.data;
+    return (result as FlodSuccess<T>).data;
   }
 }
 
-// =========================================================================
-// 2. ЕДИНЫЕ РАСШИРЕНИЯ ДЛЯ СТРОК (Трансформации + Доменные правила)
-// =========================================================================
 extension StringExtensions on StringValidator {
-  // --- Вспомогательный метод (Алгоритм Луна)
   bool isValidLuhn(String number) {
     final digits = number.replaceAll(RegExp(r'\D'), '');
     if (digits.isEmpty) return false;
@@ -56,43 +46,25 @@ extension StringExtensions on StringValidator {
     return sum % 10 == 0;
   }
 
-  // --- Базовый метод для регулярных выражений через copyWith ---
-  StringValidator regex(
-    RegExp pattern, {
-    String message = 'Invalid format',
-    String code = 'invalid_format',
-  }) {
+  StringValidator regex(RegExp pattern, {String? code}) {
     return copyWith(
       rules: [
         ...rules,
-        RegexRule(pattern, message: message, code: code),
+        RegexRule(pattern, code: code ?? FlodErrorCodes.stringRegex),
       ],
     );
   }
 
-  // --- Доменные правила ---
-
-  StringValidator email({
-    String message = 'Invalid email format',
-    String code = 'invalid_email',
-  }) => regex(
+  StringValidator email({String? code}) => regex(
     RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$'),
-    message: message,
-    code: code,
+    code: code ?? FlodErrorCodes.stringEmail,
   );
 
-  StringValidator creditCard({
-    String message = 'Invalid credit card format',
-    String code = 'invalid_credit_card',
-  }) => custom(
-    (value) {
-      final digits = value.replaceAll(RegExp(r'\D'), '');
-      if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
-      return _isValidLuhn(digits);
-    },
-    message: message,
-    code: code,
-  );
+  StringValidator creditCard({String? code}) => custom((value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
+    return _isValidLuhn(digits);
+  }, code: code ?? FlodErrorCodes.stringCreditCard);
 
   bool _isValidLuhn(String digits) {
     int sum = 0;
@@ -109,132 +81,102 @@ extension StringExtensions on StringValidator {
     return sum % 10 == 0;
   }
 
-  StringValidator cvv({
-    String message = 'Invalid CVV',
-    String code = 'invalid_cvv',
-  }) => regex(RegExp(r'^\d{3,4}$'), message: message, code: code);
+  StringValidator cvv({String? code}) =>
+      regex(RegExp(r'^\d{3,4}$'), code: code ?? FlodErrorCodes.stringCvv);
 
-  StringValidator html5Email({
-    String message = 'Invalid email format',
-    String code = 'invalid_email',
-  }) => regex(
+  StringValidator html5Email({String? code}) => regex(
     RegExp(
       r'''^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$''',
     ),
-    message: message,
-    code: code,
+    code: code ?? FlodErrorCodes.stringEmail,
   );
 
-  StringValidator url({
-    String message = 'Invalid URL format',
-    String code = 'invalid_url',
-  }) => regex(
+  StringValidator url({String? code}) => regex(
     RegExp(r'^https?:\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*$'),
-    message: message,
-    code: code,
+    code: code ?? FlodErrorCodes.stringUrl,
   );
 
-  StringValidator phoneNumber({
-    String message = 'Invalid phone number format',
-    String code = 'invalid_phone',
-  }) => regex(RegExp(r'^\+?[1-9]\d{6,14}$'), message: message, code: code);
+  StringValidator phoneNumber({String? code}) => regex(
+    RegExp(r'^\+?[1-9]\d{6,14}$'),
+    code: code ?? FlodErrorCodes.stringPhoneNumber,
+  );
 
-  StringValidator customPattern(
-    RegExp pattern, {
-    String message = 'Invalid format',
-    String code = 'invalid_pattern',
-  }) => regex(pattern, message: message, code: code);
+  StringValidator customPattern(RegExp pattern, {String? code}) =>
+      regex(pattern, code: code ?? FlodErrorCodes.stringRegex);
 
-  StringValidator uuid({
-    String message = 'Invalid UUID format',
-    String code = 'invalid_uuid',
-  }) => regex(
+  StringValidator uuid({String? code}) => regex(
     RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
     ),
-    message: message,
-    code: code,
+    code: code ?? FlodErrorCodes.stringUuid,
   );
 
-  StringValidator minUppercase(
-    int count, {
-    String message = 'Needs uppercase',
-    String code = 'min_uppercase',
-  }) => regex(RegExp('^(.*?[A-Z]){$count,}'), message: message, code: code);
+  StringValidator minUppercase(int count, {String? code}) => custom(
+    (value) => RegExp('^(.*?[A-Z]){$count,}').hasMatch(value),
+    code: code ?? FlodErrorCodes.stringMinUppercase,
+    metaParams: {'limit': count},
+  );
 
-  StringValidator minNumbers(
-    int count, {
-    String message = 'Needs numbers',
-    String code = 'min_numbers',
-  }) => regex(RegExp('^(.*?[0-9]){$count,}'), message: message, code: code);
+  StringValidator minNumbers(int count, {String? code}) => custom(
+    (value) => RegExp('^(.*?[0-9]){$count,}').hasMatch(value),
+    code: code ?? FlodErrorCodes.stringMinNumbers,
+    metaParams: {'limit': count},
+  );
 
-  StringValidator minSymbols(
-    int count, {
-    String message = 'Needs symbols',
-    String code = 'min_symbols',
-  }) => regex(
-    RegExp(
+  StringValidator minSymbols(int count, {String? code}) => custom(
+    (value) => RegExp(
       r'^(.*?[!@#\$&*~]){'
       '$count'
       r',}',
-    ),
-    message: message,
-    code: code,
+    ).hasMatch(value),
+    code: code ?? FlodErrorCodes.stringMinSymbols,
+    metaParams: {'limit': count},
   );
 }
 
-// =========================================================================
-// 3. РАСШИРЕНИЯ ДЛЯ ЧИСЕЛ И ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ
-// =========================================================================
-extension NumberExtensions<T extends num> on BaseNumberValidator<T> {
-  /// Строго положительное число (> 0)
-  BaseNumberValidator<T> positive({
-    String message = 'Must be positive',
-    String code = 'not_positive',
-  }) {
-    return custom((v) => v > 0, message: message, code: code);
+extension IntValidatorExtensions on IntValidator {
+  IntValidator positive({String? code}) {
+    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive);
   }
 
-  /// Неположительное число (<= 0)
-  BaseNumberValidator<T> nonPositive({
-    String message = 'Must be non-positive',
-    String code = 'not_non_positive',
-  }) {
-    final zero = (T == double ? 0.0 : 0) as T;
-    return max(zero, message: message, code: code);
-  }
-
-  /// Строго отрицательное число (< 0)
-  BaseNumberValidator<T> negative({
-    String message = 'Must be negative',
-    String code = 'not_negative',
-  }) {
-    return custom((v) => v < 0, message: message, code: code);
-  }
-
-  /// Неотрицательное число (>= 0) — полезно иметь в комплекте
-  BaseNumberValidator<T> nonNegative({
-    String message = 'Must be non-negative',
-    String code = 'not_non_negative',
-  }) {
-    final zero = (T == double ? 0.0 : 0) as T;
-    return min(zero, message: message, code: code);
-  }
-
-  BaseNumberValidator<T> multipleOf(num base) {
+  IntValidator nonPositive({String? code}) {
     return custom(
-      (value) {
-        if (base == 0) return false;
-
-        // Избегаем проблем округления double через эпсилон-проверку
-        final double division = value / base;
-        final double remainder = (division - division.round()).abs();
-
-        return remainder < 1e-9; // Высокая точность до 9 знака
-      },
-      message: 'Must be multiple of $base',
-      code: 'multiple_of',
+      (v) => v <= 0,
+      code: code ?? FlodErrorCodes.numberNonPositive,
     );
+  }
+
+  IntValidator negative({String? code}) {
+    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative);
+  }
+
+  IntValidator nonNegative({String? code}) {
+    return custom(
+      (v) => v >= 0,
+      code: code ?? FlodErrorCodes.numberNonNegative,
+    );
+  }
+}
+
+extension DoubleValidatorExtensions on DoubleValidator {
+  DoubleValidator positive({String? code}) {
+    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive)
+        as DoubleValidator;
+  }
+
+  DoubleValidator nonPositive({String? code}) {
+    return custom((v) => v <= 0, code: code ?? FlodErrorCodes.numberNonPositive)
+        as DoubleValidator;
+  }
+
+  DoubleValidator negative({String? code}) {
+    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative)
+        as DoubleValidator;
+  }
+
+  DoubleValidator nonNegative({String? code}) {
+    return custom((v) => v >= 0, code: code ?? FlodErrorCodes.numberNonNegative)
+        as DoubleValidator;
   }
 }
 
@@ -242,8 +184,7 @@ extension PathExtensions on List {
   List append(dynamic segment) => [...this, segment];
 }
 
-extension PathReadable on List<dynamic> {
-  String toReadable() {
-    return isEmpty ? 'root' : formatPath(this);
-  }
+extension PathConversion on List<Object> {
+  FlodPath toFlodPath() => FlodPath(this);
+  String toReadable() => toFlodPath().toReadable();
 }

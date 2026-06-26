@@ -1,5 +1,7 @@
 import 'package:flod/src/rules/base_rule.dart';
 
 abstract class BaseStringRule extends BaseRule<String> {
-  BaseStringRule({required super.message, required super.code});
+  const BaseStringRule({required super.code});
+
+  Map<String, dynamic> get params => const {};
 }

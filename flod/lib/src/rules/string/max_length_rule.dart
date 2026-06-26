@@ -3,17 +3,11 @@ import 'package:flod/src/rules/string/base_string_rule.dart';
 class MaxLengthRule extends BaseStringRule {
   final int max;
 
-  MaxLengthRule(this.max, String message, String code)
-    : super(message: message, code: code);
+  MaxLengthRule(this.max, {required super.code});
 
   @override
   bool check(String value) => value.length <= max;
 
-  // @override
-  // ValidationResult<String> validate(String value, {Path path = const []}) {
-  //   if (value.length > max) {
-  //     return FlodFailure([FlodError(path, message, code)]);
-  //   }
-  //   return FlodSuccess(value);
-  // }
+  @override
+  Map<String, dynamic> get params => {'limit': max};
 }

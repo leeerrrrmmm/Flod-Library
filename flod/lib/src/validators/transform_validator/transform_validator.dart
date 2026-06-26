@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/transformer/transformer.dart';
 
 class TransformValidator<In, Out> extends Validator<Out> {
   final Validator<In> _parent;
@@ -17,8 +18,16 @@ class TransformValidator<In, Out> extends Validator<Out> {
   }
 
   @override
-  ValidationResult<Out> validate(dynamic value, {Path path = const []}) {
-    final parentResult = _parent.validate(value, path: path);
+  ParseResult<Out> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) {
+    final parentResult = _parent.validate(
+      value,
+      path: path,
+      abortEarly: abortEarly,
+    );
 
     // Вычисляем результирующую приватность слоя
     final bool currentSecret = isSecret || _parent.isSecret;
@@ -30,9 +39,9 @@ class TransformValidator<In, Out> extends Validator<Out> {
           final obfuscated = errs
               .map(
                 (e) => FlodError(
-                  e.path,
-                  e.message,
-                  e.code,
+                  path: e.path,
+                  code: e.code,
+                  params: e.params,
                   value: null,
                   isSecret: true,
                 ),
@@ -45,18 +54,82 @@ class TransformValidator<In, Out> extends Validator<Out> {
       case FlodSuccess<In>(data: final data):
         try {
           final transformed = _transformer(data);
-          return FlodSuccess<Out>(transformed);
+          return _resolveTransformOutput(
+            transformed,
+            path: path,
+            currentSecret: currentSecret,
+            fallbackValue: value,
+          );
+        } on FlodTransformerException catch (e) {
+          final errors = currentSecret
+              ? e.errors
+                    .map(
+                      (err) => FlodError(
+                        path: err.path,
+                        code: err.code,
+                        params: err.params,
+                        value: null,
+                        isSecret: true,
+                      ),
+                    )
+                    .toList()
+              : e.errors;
+          return FlodFailure<Out>(errors);
         } catch (e) {
           final transformError = FlodError(
-            path,
-            e.toString(),
-            "transform_error",
-            value: value,
+            path: path,
+            code: FlodErrorCodes.transformError,
+            params: {},
+            value: currentSecret ? null : value,
             isSecret: currentSecret,
           );
 
           return FlodFailure<Out>([transformError]);
         }
     }
+  }
+
+  /// Unwraps nested [ParseResult] values returned from transform callbacks.
+  ParseResult<Out> _resolveTransformOutput(
+    dynamic transformed, {
+    required FlodPath path,
+    required bool currentSecret,
+    required dynamic fallbackValue,
+  }) {
+    if (transformed is ParseResult) {
+      switch (transformed) {
+        case FlodFailure(errors: final errs):
+          if (currentSecret) {
+            final obfuscated = errs
+                .map(
+                  (e) => FlodError(
+                    path: e.path.segments.isEmpty ? path : e.path,
+                    code: e.code,
+                    params: e.params,
+                    value: null,
+                    isSecret: true,
+                  ),
+                )
+                .toList();
+            return FlodFailure<Out>(obfuscated);
+          }
+          final propagated = errs
+              .map(
+                (e) => FlodError(
+                  path: e.path.segments.isEmpty ? path : e.path,
+                  code: e.code,
+                  params: e.params,
+                  value: e.isSecret ? null : e.rawValue,
+                  isSecret: e.isSecret || currentSecret,
+                ),
+              )
+              .toList();
+          return FlodFailure<Out>(propagated);
+        case FlodSuccess(data: final outData):
+          return FlodSuccess<Out>(outData as Out);
+      }
+    }
+
+    return FlodSuccess<Out>(transformed as Out);
   }
 }

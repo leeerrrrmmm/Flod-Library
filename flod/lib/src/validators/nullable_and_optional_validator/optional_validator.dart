@@ -1,8 +1,5 @@
+import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/types/path.dart';
 
 class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
   final Validator<T> _inner;
@@ -32,26 +29,34 @@ class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
   }
 
   @override
-  ValidationResult<T?> validate(dynamic value, {Path path = const []}) {
+  ParseResult<T?> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) {
     // 1. EXECUTION ORDER: Применяем трансформации уровня Optional
-    final dynamic transformed = applyTransforms(value);
+    final dynamic transformed = applyTransforms(value, path);
 
     // 2. Если значение null — успешный выход
     if (transformed == null) {
-      return FlodSuccess(null);
+      return FlodSuccess<T?>(null);
     }
 
     // 3. Делегируем глубокую валидацию и внутренние трансформации дочернему валидатору
-    final result = _inner.validate(transformed, path: path);
+    final result = _inner.validate(
+      transformed,
+      path: path,
+      abortEarly: abortEarly,
+    );
 
     if (result is FlodFailure) {
       if (isSecret) {
-        final obfuscatedErrors = result.errors
+        final obfuscatedErrors = (result as FlodFailure<T?>).errors
             .map(
               (e) => FlodError(
-                e.path,
-                e.message,
-                e.code,
+                path: e.path,
+                code: e.code,
+                params: e.params,
                 value: null,
                 isSecret: true,
               ),
@@ -60,11 +65,11 @@ class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
         return FlodFailure(obfuscatedErrors);
       }
 
-      return FlodFailure(result.errors);
+      return FlodFailure<T?>((result as FlodFailure<T?>).errors);
     }
 
     // Безопасно вытаскиваем данные из FlodSuccess
-    return FlodSuccess(result.data);
+    return FlodSuccess<T?>((result as FlodSuccess<T?>).data);
   }
 }
 

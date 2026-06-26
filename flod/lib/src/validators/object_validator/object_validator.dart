@@ -1,8 +1,5 @@
+import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/types/path.dart';
 
 enum ObjectMode { strict, passthrough }
 
@@ -28,9 +25,12 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
 
   @override
   ObjectValidator secret() => copyWith(isSecret: true);
-  ObjectValidator strict() => copyWith(mode: ObjectMode.strict);
-  ObjectValidator passthrough() => copyWith(mode: ObjectMode.passthrough);
+  @override
   ObjectValidator stopOnFirstError() => copyWith(abortEarly: true);
+  @override
+  ObjectValidator strict() => copyWith(mode: ObjectMode.strict);
+
+  ObjectValidator passthrough() => copyWith(mode: ObjectMode.passthrough);
 
   ObjectValidator copyWith({
     Map<String, Validator>? schema,
@@ -49,101 +49,127 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
   }
 
   @override
-  ValidationResult<Map<String, dynamic>> validate(
+  ParseResult<Map<String, dynamic>> validate(
     dynamic value, {
-    Path path = const [],
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly, // Динамический проброс флага от safeParse верхнего уровня
   }) {
+    // Приоритет у динамического флага (например, переданного в safeParse), иначе берем дефолт схемы
+    final effectiveAbortEarly = abortEarly ?? this.abortEarly;
+
     if (value is! Map) {
       return FlodFailure([
         FlodError(
-          path,
-          'Expected object',
-          'invalid_type',
-          value: value,
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: {'expected': 'Map', 'actual': value.runtimeType.toString()},
+          value: isSecret ? null : value,
           isSecret: isSecret,
         ),
       ]);
     }
 
-    final dynamic rawTransformed = applyTransforms(value);
+    // Выполняем трансформации строго ДО валидации (Пункт 5.3 карты)
+    final dynamic rawTransformed = applyTransforms(value, path);
+    if (rawTransformed is! Map) {
+      return FlodFailure([
+        FlodError(
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: {
+            'expected': 'Map',
+            'actual': rawTransformed.runtimeType.toString(),
+          },
+          value: isSecret ? null : rawTransformed,
+          isSecret: isSecret,
+        ),
+      ]);
+    }
+
     final Map<String, dynamic> transformed = Map<String, dynamic>.from(
       rawTransformed,
     );
-
     final Map<String, dynamic> outputResult = {};
     final errors = <FlodError>[];
 
+    // 1. Проверка на избыточные ключи в режиме .strict() (Пункт 3.1 карты)
+    if (mode == ObjectMode.strict) {
+      for (final key in transformed.keys) {
+        if (!schema.containsKey(key)) {
+          final error = FlodError(
+            path: path.append(key),
+            code: FlodErrorCodes.objectStrict,
+            params: {'key': key},
+            value: isSecret ? null : transformed[key],
+            isSecret: isSecret,
+          );
+
+          // МГНОВЕННЫЙ ВЫХОД: Экономим ресурсы процессора, не идем дальше
+          if (effectiveAbortEarly) return FlodFailure([error]);
+          errors.add(error);
+        }
+      }
+    }
+
+    // 2. Основной цикл обхода полей схемы
     for (final entry in schema.entries) {
       final key = entry.key;
       final validator = entry.value;
 
+      // Прокидываем приватность родителя дочернему валидатору (Пункт 22 карты)
+      final effectiveValidator = isSecret ? validator.secret() : validator;
+
       if (transformed.containsKey(key)) {
-        // --- КЛЮЧ ПРИСУТСТВУЕТ: Обычная валидация ---
         final fieldValue = transformed[key];
-        final result = validator.validate(fieldValue, path: [...path, key]);
+
+        // Рекурсивно прокидываем effectiveAbortEarly вглубь дерева
+        final result = effectiveValidator.validate(
+          fieldValue,
+          path: path.append(key),
+          abortEarly: effectiveAbortEarly,
+        );
 
         if (result is FlodSuccess) {
           outputResult[key] = result.data;
         } else if (result is FlodFailure) {
-          final errorsToReport = isSecret
-              ? result.errors
-                    .map(
-                      (e) => FlodError(
-                        e.path,
-                        e.message,
-                        e.code,
-                        value: null,
-                        isSecret: true,
-                      ),
-                    )
-                    .toList()
-              : result.errors;
-          errors.addAll(errorsToReport);
-
-          if (abortEarly) break;
+          // МГНОВЕННЫЙ ВЫХОД: Если дочерний элемент упал, прерываем цикл схемы объекта!
+          if (effectiveAbortEarly) {
+            return FlodFailure([result.errors.first]);
+          }
+          errors.addAll(result.errors);
         }
       } else {
-        // --- КЛЮЧА НЕТ: Функциональный опрос дочернего валидатора через null ---
-        final result = validator.validate(null, path: [...path, key]);
+        // Опрашиваем отсутствующее поле через концепцию "черного ящика"
+        final result = effectiveValidator.validate(
+          null,
+          path: path.append(key),
+          abortEarly: effectiveAbortEarly,
+        );
 
         if (result is FlodSuccess) {
-          // Если это был Default или Optional, мы берем результат.
-          // Если значение null и поле просто опциональное, можно сохранить или опустить
-          // (в Dart map['key'] все равно вернет null, но явная запись чище).
-          outputResult[key] = result.data;
-        } else {
-          // Если валидатор вернул ошибку на null, значит поле обязательное и отсутствует!
-          errors.add(
-            FlodError(
-              [...path, key],
-              'Field is required',
-              'required',
-              value: null,
-              isSecret: isSecret,
-            ),
+          outputResult[key] =
+              result.data; // Заполнение .default() или пропуск .optional()
+        } else if (result is FlodFailure) {
+          final error = FlodError(
+            path: path.append(key),
+            code: FlodErrorCodes.required,
+            params: {'key': key},
+            value: null,
+            isSecret: isSecret,
           );
 
-          if (abortEarly) break;
+          // МГНОВЕННЫЙ ВЫХОД: Экономим такты ЦП при отсутствии обязательного поля
+          if (effectiveAbortEarly) return FlodFailure([error]);
+          errors.add(error);
         }
       }
     }
 
-    if (mode == ObjectMode.strict) {
-      for (final key in transformed.keys) {
-        if (!schema.containsKey(key)) {
-          errors.add(
-            FlodError(
-              [...path, key],
-              'Unknown key',
-              'strict_mode',
-              value: transformed[key],
-              isSecret: isSecret,
-            ),
-          );
-        }
-      }
+    if (errors.isNotEmpty) {
+      return FlodFailure(errors);
     }
 
+    // Если всё прошло успешно, подмешиваем невалидируемые ключи в passthrough режиме
     if (mode == ObjectMode.passthrough) {
       transformed.forEach((key, val) {
         if (!schema.containsKey(key)) {
@@ -152,6 +178,6 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       });
     }
 
-    return errors.isEmpty ? FlodSuccess(outputResult) : FlodFailure(errors);
+    return FlodSuccess<Map<String, dynamic>>(outputResult);
   }
 }

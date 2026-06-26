@@ -1,9 +1,6 @@
+import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
 import 'package:flod/src/rules/numbers/base_number_rule.dart';
-import 'package:flod/src/types/path.dart';
-import 'package:flod/src/validators/number_validator/base_number_validator.dart';
 
 class DoubleValidator extends BaseNumberValidator<double>
     with Transformable<double> {
@@ -54,32 +51,41 @@ class DoubleValidator extends BaseNumberValidator<double>
   // =========================================================================
 
   @override
-  ValidationResult<double> validate(dynamic value, {Path path = const []}) {
+  ParseResult<double> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly = false,
+  }) {
     // ЗАЩИТА 1: Сначала проверяем тип, оберегая конвейер трансформаций от падений
     if (value is! double) {
       return FlodFailure([
         FlodError(
-          path,
-          'Expected double',
-          'invalid_type',
-          value: value,
+          path: path,
+          code: FlodErrorCodes.invalidType,
+          params: {
+            'expected': 'double',
+            'actual': value.runtimeType.toString(),
+          },
+          value: isSecret ? null : value,
           isSecret: isSecret,
         ),
       ]);
     }
 
     // EXECUTION ORDER (5.3): Прогоняем число через пайплайн трансформаций
-    final dynamic rawTransformed = applyTransforms(value);
+    final dynamic rawTransformed = applyTransforms(value, path);
     final double transformed = rawTransformed as double;
 
     // ЗАЩИТА 2: Проверяем на Finite / NaN уже трансформированное число
     if (!transformed.isFinite) {
       return FlodFailure([
         FlodError(
-          path,
-          'Value must be finite and not NaN',
-          'invalid_number',
-          value: transformed, // В лог уходит актуальное состояние
+          path: path,
+          code: FlodErrorCodes.invalidNumber,
+          params: {'value': transformed},
+          value: isSecret
+              ? null
+              : transformed, // В лог уходит актуальное состояние
           isSecret: isSecret,
         ),
       ]);
@@ -92,16 +98,18 @@ class DoubleValidator extends BaseNumberValidator<double>
       if (!rule.check(transformed)) {
         errors.add(
           FlodError(
-            path,
-            rule.message,
-            rule.code,
-            value: transformed,
+            path: path,
+            code: rule.code,
+            params: rule.params,
+            value: isSecret ? null : transformed,
             isSecret: isSecret,
           ),
         );
       }
     }
 
-    return errors.isEmpty ? FlodSuccess(transformed) : FlodFailure(errors);
+    return errors.isEmpty
+        ? FlodSuccess<double>(transformed)
+        : FlodFailure<double>(errors);
   }
 }

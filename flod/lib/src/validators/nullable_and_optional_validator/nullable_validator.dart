@@ -1,8 +1,5 @@
+import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/error.dart';
-import 'package:flod/src/res/validation_result.dart';
-import 'package:flod/src/types/path.dart';
 
 class NullableValidator<T> extends Validator<T?> with Transformable<T?> {
   final Validator<T> _inner;
@@ -37,27 +34,36 @@ class NullableValidator<T> extends Validator<T?> with Transformable<T?> {
   }
 
   @override
-  ValidationResult<T?> validate(dynamic value, {Path path = const []}) {
+  ParseResult<T?> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) {
     // 1. EXECUTION ORDER (5.3): Сначала применяем трансформации уровня Nullable
-    final dynamic transformed = applyTransforms(value);
+    final dynamic transformed = applyTransforms(value, path);
 
     // 2. Логика nullability — если значение null, прерываем цепочку с успехом
     if (transformed == null) {
-      return FlodSuccess(null);
+      return FlodSuccess<T?>(null);
     }
 
     // 3. Передаем управление внутреннему валидатору для проверки типа и правил
-    final result = _inner.validate(transformed, path: path);
+    final result = _inner.validate(
+      transformed,
+      path: path,
+      abortEarly: abortEarly,
+    );
 
     if (result is FlodFailure) {
       // Обфускация ошибок: если обертка секретна, стираем сырые данные из логов
       if (isSecret) {
-        final obfuscatedErrors = result.errors
+        final obfuscatedErrors = (result as FlodFailure<T?>).errors
             .map(
               (e) => FlodError(
-                e.path,
-                e.message,
-                e.code,
+                path: e.path,
+                code: e.code,
+                params: e.params,
+
                 value: null,
                 isSecret: true,
               ),
@@ -66,11 +72,11 @@ class NullableValidator<T> extends Validator<T?> with Transformable<T?> {
         return FlodFailure(obfuscatedErrors);
       }
 
-      return FlodFailure(result.errors);
+      return FlodFailure<T?>((result as FlodFailure<T?>).errors);
     }
 
     // Безопасное извлечение данных через твой геттер .data
-    return FlodSuccess(result.data);
+    return FlodSuccess<T?>((result as FlodSuccess<T?>).data);
   }
 }
 
