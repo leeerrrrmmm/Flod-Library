@@ -76,6 +76,28 @@ class IntValidator extends Validator<int> with Transformable<int> {
     );
   }
 
+  IntValidator positive({String? code}) {
+    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive);
+  }
+
+  IntValidator nonPositive({String? code}) {
+    return custom(
+      (v) => v <= 0,
+      code: code ?? FlodErrorCodes.numberNonPositive,
+    );
+  }
+
+  IntValidator negative({String? code}) {
+    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative);
+  }
+
+  IntValidator nonNegative({String? code}) {
+    return custom(
+      (v) => v >= 0,
+      code: code ?? FlodErrorCodes.numberNonNegative,
+    );
+  }
+
   @override
   ParseResult<int> validate(
     dynamic value, {

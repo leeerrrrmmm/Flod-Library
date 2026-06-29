@@ -46,6 +46,12 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
 
   ListValidator<T> maxItems(int n) => copyWith(maxItemsLength: n);
 
+  /// Zod-compatible alias for [minItems].
+  ListValidator<T> min(int n) => minItems(n);
+
+  /// Zod-compatible alias for [maxItems].
+  ListValidator<T> max(int n) => maxItems(n);
+
   ListValidator<T> uniqueItems() => copyWith(isUnique: true);
 
   @override

@@ -13,6 +13,9 @@ class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
     super.isSecret = false,
   });
 
+  /// Inner validator wrapped by this optional layer.
+  Validator<T> get inner => _inner;
+
   @override
   OptionalValidator<T> secret() => copyWith(isSecret: true);
 

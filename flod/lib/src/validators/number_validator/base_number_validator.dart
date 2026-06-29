@@ -40,4 +40,26 @@ abstract class BaseNumberValidator<T extends num> extends Validator<T> {
       MaxValueRule(maxVal, code: code ?? FlodErrorCodes.numberMax),
     ], isSecret: isSecret);
   }
+
+  BaseNumberValidator<T> positive({String? code}) {
+    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive);
+  }
+
+  BaseNumberValidator<T> nonPositive({String? code}) {
+    return custom(
+      (v) => v <= 0,
+      code: code ?? FlodErrorCodes.numberNonPositive,
+    );
+  }
+
+  BaseNumberValidator<T> negative({String? code}) {
+    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative);
+  }
+
+  BaseNumberValidator<T> nonNegative({String? code}) {
+    return custom(
+      (v) => v >= 0,
+      code: code ?? FlodErrorCodes.numberNonNegative,
+    );
+  }
 }

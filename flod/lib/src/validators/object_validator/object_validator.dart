@@ -1,5 +1,6 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
+import 'package:flod/src/validators/object_validator/object_composition.dart';
 
 enum ObjectMode { strict, passthrough }
 
@@ -31,6 +32,36 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
   ObjectValidator strict() => copyWith(mode: ObjectMode.strict);
 
   ObjectValidator passthrough() => copyWith(mode: ObjectMode.passthrough);
+
+  /// Adds or overrides keys. Later keys in [shape] win on conflict (Zod `.extend()`).
+  ObjectValidator extend(Map<String, Validator> shape) {
+    return copyWith(schema: {...schema, ...shape});
+  }
+
+  /// Merges another object schema into this one (Zod `.merge()`).
+  ObjectValidator merge(ObjectValidator other) => extend(other.schema);
+
+  /// Makes every field optional; [deep] recursively partializes nested objects.
+  ObjectValidator partial({bool deep = true}) {
+    return copyWith(schema: partializeSchema(schema, deep: deep));
+  }
+
+  /// Keeps only the listed keys (Zod `.pick()`).
+  ObjectValidator pick(Iterable<String> keys) {
+    return copyWith(
+      schema: {
+        for (final key in keys)
+          if (schema.containsKey(key)) key: schema[key]!,
+      },
+    );
+  }
+
+  /// Removes the listed keys (Zod `.omit()`).
+  ObjectValidator omit(Iterable<String> keys) {
+    final omitted = Map<String, Validator>.from(schema)
+      ..removeWhere((key, _) => keys.contains(key));
+    return copyWith(schema: omitted);
+  }
 
   ObjectValidator copyWith({
     Map<String, Validator>? schema,

@@ -14,6 +14,9 @@ class NullableValidator<T> extends Validator<T?> with Transformable<T?> {
     super.isSecret = false,
   });
 
+  /// Inner validator wrapped by this nullable layer.
+  Validator<T> get inner => _inner;
+
   @override
   NullableValidator<T> secret() => copyWith(isSecret: true);
 

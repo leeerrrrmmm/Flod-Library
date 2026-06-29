@@ -69,6 +69,10 @@ class StringValidator extends Validator<String> with Transformable<String> {
     );
   }
 
+  /// Zod-compatible alias for [fixedLength].
+  StringValidator length(int length, {String? code}) =>
+      fixedLength(length, code: code);
+
   StringValidator regex(RegExp pattern, {String? code}) {
     return copyWith(
       rules: [
@@ -83,20 +87,53 @@ class StringValidator extends Validator<String> with Transformable<String> {
     code: code ?? FlodErrorCodes.stringEmail,
   );
 
-  StringValidator creditCard({String? code}) => custom((v) {
+  StringValidator creditCard({String? code}) => custom((value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
+    return _isValidLuhn(digits);
+  }, code: code ?? FlodErrorCodes.stringCreditCard);
+
+  StringValidator cvv({String? code}) =>
+      regex(RegExp(r'^\d{3,4}$'), code: code ?? FlodErrorCodes.stringCvv);
+
+  StringValidator html5Email({String? code}) => regex(
+    RegExp(
+      r'''^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$''',
+    ),
+    code: code ?? FlodErrorCodes.stringEmail,
+  );
+
+  StringValidator url({String? code}) => regex(
+    RegExp(r'^https?:\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*$'),
+    code: code ?? FlodErrorCodes.stringUrl,
+  );
+
+  StringValidator phoneNumber({String? code}) => regex(
+    RegExp(r'^\+?[1-9]\d{6,14}$'),
+    code: code ?? FlodErrorCodes.stringPhoneNumber,
+  );
+
+  StringValidator uuid({String? code}) => regex(
+    RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    ),
+    code: code ?? FlodErrorCodes.stringUuid,
+  );
+
+  bool _isValidLuhn(String digits) {
     int sum = 0;
     bool alternate = false;
-    for (int i = v.length - 1; i >= 0; i--) {
-      int n = int.tryParse(v[i]) ?? 0;
+    for (int i = digits.length - 1; i >= 0; i--) {
+      int n = int.parse(digits[i]);
       if (alternate) {
         n *= 2;
-        if (n > 9) n = (n % 10) + 1;
+        if (n > 9) n -= 9;
       }
       sum += n;
       alternate = !alternate;
     }
     return sum % 10 == 0;
-  }, code: code ?? FlodErrorCodes.stringCreditCard);
+  }
 
   StringValidator minUppercase(int limit, {String? code}) => custom(
     (v) => v.replaceAll(RegExp(r'[^A-Z]'), '').length >= limit,

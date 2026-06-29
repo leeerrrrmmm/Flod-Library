@@ -46,6 +46,22 @@ class DoubleValidator extends BaseNumberValidator<double>
     );
   }
 
+  @override
+  DoubleValidator positive({String? code}) =>
+      super.positive(code: code) as DoubleValidator;
+
+  @override
+  DoubleValidator nonPositive({String? code}) =>
+      super.nonPositive(code: code) as DoubleValidator;
+
+  @override
+  DoubleValidator negative({String? code}) =>
+      super.negative(code: code) as DoubleValidator;
+
+  @override
+  DoubleValidator nonNegative({String? code}) =>
+      super.nonNegative(code: code) as DoubleValidator;
+
   // =========================================================================
   // ЯДРО ВАЛИДАЦИИ
   // =========================================================================
