@@ -76,11 +76,26 @@ class RefineValidator<T> extends Validator<T> {
     FlodPath path = const FlodPath([]),
     bool? abortEarly,
   }) {
+    FlodDebug.trace(
+      'enter',
+      validator: 'RefineValidator',
+      path: path,
+      value: value,
+      isSecret: isSecret,
+    );
+
     //Сначала проверяем внутренний валидатор
     final result = _inner.validate(value, path: path, abortEarly: abortEarly);
 
     //Сразу проверяем на ошибки
     if (result is FlodFailure) {
+      FlodDebug.trace(
+        'fail',
+        validator: 'RefineValidator',
+        path: path,
+        detail: 'inner failure',
+        isSecret: isSecret,
+      );
       return result;
     }
 
@@ -92,6 +107,147 @@ class RefineValidator<T> extends Validator<T> {
       if (!isValid) {
         // Формируем целевой путь. Если передан локальный path: ['confirmPassword'],
         // склеиваем его с текущим родительским контекстом.
+        final targetPath = _customPath != null
+            ? FlodPath([...path.segments, ..._customPath])
+            : path;
+
+        FlodDebug.trace(
+          'fail',
+          validator: 'RefineValidator',
+          path: targetPath,
+          detail: _code,
+          isSecret: isSecret,
+        );
+
+        return FlodFailure([
+          FlodError(
+            path: targetPath,
+            code: _code,
+            params: {'value': isSecret ? null : data, ...?_params},
+            value: isSecret ? null : data,
+            isSecret: isSecret,
+          ),
+        ]);
+      }
+    } catch (e) {
+      return FlodFailure([
+        FlodError(
+          path: path,
+          code: FlodErrorCodes.refineException,
+          params: _params ?? {},
+          value: data,
+          isSecret: isSecret,
+        ),
+      ]);
+    }
+
+    FlodDebug.trace(
+      'ok',
+      validator: 'RefineValidator',
+      path: path,
+      value: data,
+      isSecret: isSecret,
+    );
+    return result;
+  }
+}
+
+/// Async refine layer — requires [ValidatorExtensions.safeParseAsync].
+class AsyncRefineValidator<T> extends Validator<T>
+    implements AsyncValidator<T> {
+  final Validator<T> _inner;
+  final Future<bool> Function(T value) _predicate;
+  final List<String>? _customPath;
+  final String _code;
+  final Map<String, dynamic>? _params;
+
+  Validator<T> get inner => _inner;
+
+  @override
+  bool get isCompiled => _inner.isCompiled;
+
+  Future<bool> Function(T value) get predicate => _predicate;
+  List<String>? get customPath => _customPath;
+  String get errorCode => _code;
+  Map<String, dynamic>? get errorParams => _params;
+
+  AsyncRefineValidator(
+    this._inner,
+    this._predicate,
+    this._customPath,
+    this._code,
+    this._params, {
+    super.isSecret = false,
+  });
+
+  @override
+  Validator? getFieldSchema(String key) => _inner.getFieldSchema(key);
+
+  @override
+  AsyncRefineValidator<T> secret() => AsyncRefineValidator(
+    _inner.secret(),
+    _predicate,
+    _customPath,
+    _code,
+    _params,
+    isSecret: true,
+  );
+
+  @override
+  Validator<T> strict() => AsyncRefineValidator(
+    _inner.strict(),
+    _predicate,
+    _customPath,
+    _code,
+    _params,
+    isSecret: isSecret,
+  );
+
+  @override
+  Validator<T> stopOnFirstError() => AsyncRefineValidator(
+    _inner.stopOnFirstError(),
+    _predicate,
+    _customPath,
+    _code,
+    _params,
+    isSecret: isSecret,
+  );
+
+  @override
+  ParseResult<T> validate(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) {
+    return FlodFailure([
+      FlodError(
+        path: path,
+        code: FlodErrorCodes.asyncParseRequired,
+        params: const {},
+        value: value,
+        isSecret: isSecret,
+      ),
+    ]);
+  }
+
+  @override
+  Future<ParseResult<T>> validateAsync(
+    dynamic value, {
+    FlodPath path = const FlodPath([]),
+    bool? abortEarly,
+  }) async {
+    final result = await _resolveInner(
+      value,
+      path: path,
+      abortEarly: abortEarly,
+    );
+    if (result is FlodFailure) return result;
+
+    final T data = (result as FlodSuccess<T>).data;
+
+    try {
+      final isValid = await _predicate(data);
+      if (!isValid) {
         final targetPath = _customPath != null
             ? FlodPath([...path.segments, ..._customPath])
             : path;
@@ -117,7 +273,25 @@ class RefineValidator<T> extends Validator<T> {
         ),
       ]);
     }
+
     return result;
+  }
+
+  Future<ParseResult<T>> _resolveInner(
+    dynamic value, {
+    required FlodPath path,
+    bool? abortEarly,
+  }) {
+    if (_inner is AsyncValidator<T>) {
+      return (_inner as AsyncValidator<T>).validateAsync(
+        value,
+        path: path,
+        abortEarly: abortEarly,
+      );
+    }
+    return Future.value(
+      _inner.validate(value, path: path, abortEarly: abortEarly),
+    );
   }
 }
 
@@ -137,6 +311,23 @@ extension RefineExtension<T> on Validator<T> {
       isSecret: isSecret,
     );
   }
+
+  /// Async variant of [refine]; use with [safeParseAsync].
+  AsyncRefineValidator<T> refineAsync(
+    Future<bool> Function(T value) predicate, {
+    List<String>? path,
+    String? code,
+    Map<String, dynamic>? params,
+  }) {
+    return AsyncRefineValidator<T>(
+      this,
+      predicate,
+      path,
+      code ?? 'custom_refine',
+      params,
+      isSecret: isSecret,
+    );
+  }
 }
 
 extension RefineObjectExtension on ObjectValidator {
@@ -147,6 +338,22 @@ extension RefineObjectExtension on ObjectValidator {
     Map<String, dynamic>? params,
   }) {
     return RefineValidator<Map<String, dynamic>>(
+      this,
+      predicate,
+      path,
+      code ?? 'custom_refine',
+      params,
+      isSecret: isSecret,
+    );
+  }
+
+  AsyncRefineValidator<Map<String, dynamic>> refineAsync(
+    Future<bool> Function(Map<String, dynamic> value) predicate, {
+    List<String>? path,
+    String? code,
+    Map<String, dynamic>? params,
+  }) {
+    return AsyncRefineValidator<Map<String, dynamic>>(
       this,
       predicate,
       path,

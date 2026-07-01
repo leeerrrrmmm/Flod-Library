@@ -86,7 +86,7 @@ void main() {
   });
 
   group('Zod-compatible API aliases', () {
-    test('ListValidator.min/max aliases', () {
+    test('ListValidator.min/max', () {
       final schema = Flod.list(schema: Flod.int()).min(1).max(3);
 
       expect(schema.safeParse([1, 2]), isA<FlodSuccess>());
@@ -101,7 +101,7 @@ void main() {
       expect(schema.safeParse('ab'), isA<FlodFailure>());
     });
 
-    test('withDefault alias', () {
+    test('withDefault canonical default API', () {
       final schema = Flod.string().withDefault('guest');
 
       expect(schema.safeParse(null), isA<FlodSuccess>());
@@ -116,6 +116,111 @@ void main() {
     test('number sign rules on DoubleValidator', () {
       expect(Flod.double().nonNegative().safeParse(0.0), isA<FlodSuccess>());
       expect(Flod.double().nonNegative().safeParse(-1.0), isA<FlodFailure>());
+    });
+  });
+
+  group('Debug mode (15.3)', () {
+    tearDown(() {
+      FlodConfig.debug = false;
+      FlodConfig.onTrace = null;
+    });
+
+    test('FlodDebug.trace emits when debug enabled', () {
+      final traces = <String>[];
+      FlodConfig.debug = true;
+      FlodConfig.onTrace = traces.add;
+
+      Flod.object({'name': Flod.string()}).safeParse({'name': 'Alice'});
+
+      expect(traces, isNotEmpty);
+      expect(traces.any((t) => t.contains('ObjectValidator')), isTrue);
+    });
+
+    test('FlodDebug.trace silent when debug disabled', () {
+      final traces = <String>[];
+      FlodConfig.debug = false;
+      FlodConfig.onTrace = traces.add;
+
+      Flod.string().safeParse('hello');
+
+      expect(traces, isEmpty);
+    });
+  });
+
+  group('SuperRefine & async refine (21.3)', () {
+    test('superRefine adds multiple targeted issues', () {
+      final schema = Flod.object({
+        'password': Flod.string().min(8),
+        'confirmPassword': Flod.string(),
+      }).superRefine((val, ctx) {
+        if (val['password'] != val['confirmPassword']) {
+          ctx.addIssue(
+            path: ['confirmPassword'],
+            code: 'password_mismatch',
+          );
+        }
+        if (val['password'] == 'weakpass') {
+          ctx.addIssue(
+            path: ['password'],
+            code: 'password_too_common',
+          );
+        }
+      });
+
+      final result = schema.safeParse({
+        'password': 'weakpass',
+        'confirmPassword': 'different',
+      });
+
+      expect(result, isA<FlodFailure>());
+      final errors = (result as FlodFailure).errors;
+      expect(errors.length, 2);
+      expect(
+        errors.any((e) => e.path.toReadable().contains('confirmPassword')),
+        isTrue,
+      );
+      expect(
+        errors.any((e) => e.path.toReadable().contains('password')),
+        isTrue,
+      );
+    });
+
+    test('refineAsync validates asynchronously', () async {
+      final schema = Flod.object({
+        'token': Flod.string(),
+      }).refineAsync((val) async {
+        await Future<void>.delayed(Duration.zero);
+        return val['token'] == 'valid';
+      }, code: 'invalid_token');
+
+      expect(schema.safeParse({'token': 'bad'}), isA<FlodFailure>());
+      expect(
+        schema.safeParse({'token': 'bad'}) as FlodFailure,
+        predicate<FlodFailure>(
+          (f) => f.errors.first.code == FlodErrorCodes.asyncParseRequired,
+        ),
+      );
+
+      final result = await schema.safeParseAsync({'token': 'valid'});
+      expect(result, isA<FlodSuccess>());
+    });
+
+    test('superRefineAsync validates asynchronously', () async {
+      final schema = Flod.object({
+        'a': Flod.int(),
+        'b': Flod.int(),
+      }).superRefineAsync((val, ctx) async {
+        await Future<void>.delayed(Duration.zero);
+        if ((val['a'] as int) + (val['b'] as int) > 10) {
+          ctx.addIssue(path: ['b'], code: 'sum_too_large');
+        }
+      });
+
+      final fail = await schema.safeParseAsync({'a': 6, 'b': 5});
+      expect(fail, isA<FlodFailure>());
+
+      final ok = await schema.safeParseAsync({'a': 3, 'b': 4});
+      expect(ok, isA<FlodSuccess>());
     });
   });
 }

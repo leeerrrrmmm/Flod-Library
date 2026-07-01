@@ -1,7 +1,11 @@
+import 'package:dio/dio.dart';
+import 'package:flod/dio.dart';
 import 'package:flod/flod.dart';
+import 'package:flod/form.dart';
+import 'package:flod/guard.dart';
 import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
-void main() {
+void main() async {
   print("=================================================================");
   print("          FLOD PRIVACY & HIGH-STRESS PERFORMANCE MATRIX          ");
   print("=================================================================\n");
@@ -666,6 +670,291 @@ void main() {
   );
 
   // =========================================================================
+  // SECTION 16: INTEGRATIONS (Form / JSON Guard / Dio)
+  // =========================================================================
+  print("=== SECTION 16: INTEGRATIONS (Form / JSON Guard / Dio) ===");
+
+  var integPassed = 0;
+  var integFailed = 0;
+
+  void integCheck(String label, bool ok, [String detail = '']) {
+    if (ok) {
+      integPassed++;
+      print('   ✅ $label');
+    } else {
+      integFailed++;
+      print('   🚨 FAIL: $label${detail.isEmpty ? '' : ' -> $detail'}');
+    }
+  }
+
+  // --- 16.1 Form Adapter ---
+  final signupSchema =
+      Flod.object({
+        'email': Flod.string().email(),
+        'password': Flod.string().min(8),
+        'confirmPassword': Flod.string(),
+      }).refine(
+        (d) => d['password'] == d['confirmPassword'],
+        code: 'passwords_match',
+        path: ['confirmPassword'],
+      );
+  final formAdapter = FlodFormAdapter(signupSchema);
+
+  final invalidForm = {
+    'email': 'not-an-email',
+    'password': 'short',
+    'confirmPassword': 'mismatch',
+  };
+  final formFields = formAdapter.validate(invalidForm);
+  final formGrouped = formAdapter.validateGrouped(invalidForm);
+  integCheck('INT-01 form validate() returns field map', formFields.isNotEmpty);
+  integCheck(
+    'INT-02 form validateGrouped() has email errors',
+    formGrouped.containsKey('email'),
+  );
+  integCheck(
+    'INT-03 form errorFor() targets confirmPassword',
+    formAdapter.errorFor('confirmPassword', {
+          'email': 'user@example.com',
+          'password': 'SecurePass99',
+          'confirmPassword': 'DifferentPass',
+        }) !=
+        null,
+  );
+
+  final emailFieldValidator = formAdapter.fieldValidator(
+    'email',
+    () => invalidForm,
+  );
+  integCheck(
+    'INT-04 form fieldValidator() returns message for bad email',
+    emailFieldValidator(null) != null,
+  );
+
+  final validForm = {
+    'email': 'user@example.com',
+    'password': 'SecurePass99',
+    'confirmPassword': 'SecurePass99',
+  };
+  integCheck(
+    'INT-05 form validate() empty on valid payload',
+    formAdapter.validate(validForm).isEmpty,
+  );
+
+  // --- 16.2 JSON Guard ---
+  const jsonGuard = JsonGuard();
+  const tightGuard = JsonGuard(
+    options: JsonGuardOptions(maxDepth: 3, maxKeys: 5, maxStringLength: 20),
+  );
+  final apiUserSchema = Flod.object({
+    'id': Flod.int(),
+    'name': Flod.string().min(1),
+  });
+
+  final guardOk = jsonGuard.parseJson('{"id":1,"name":"Ada"}', apiUserSchema);
+  integCheck('INT-06 guard parseJson valid payload', guardOk is FlodSuccess);
+
+  final guardBadJson = jsonGuard.parseJson('{broken', apiUserSchema);
+  integCheck(
+    'INT-07 guard rejects malformed JSON',
+    guardBadJson is FlodFailure &&
+        (guardBadJson as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardInvalidJson,
+  );
+
+  final guardProto = jsonGuard.parseJson(
+    '{"id":1,"name":"Ada","__proto__":{"isAdmin":true}}',
+    apiUserSchema,
+  );
+  integCheck(
+    'INT-08 guard blocks __proto__ key',
+    guardProto is FlodFailure &&
+        (guardProto as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardPrototypeKey,
+  );
+
+  final deepPayload = {
+    'a': {
+      'b': {
+        'c': {'d': 1},
+      },
+    },
+  };
+  final guardDepth = tightGuard.guard(deepPayload, apiUserSchema);
+  integCheck(
+    'INT-09 guard enforces maxDepth',
+    guardDepth is FlodFailure &&
+        (guardDepth as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardMaxDepth,
+  );
+
+  final guardKeys = tightGuard.guard({
+    'id': 1,
+    'name': 'Ada',
+    'extra1': 1,
+    'extra2': 2,
+    'extra3': 3,
+    'extra4': 4,
+  }, apiUserSchema);
+  integCheck(
+    'INT-10 guard enforces maxKeys budget',
+    guardKeys is FlodFailure &&
+        (guardKeys as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardMaxKeys,
+  );
+
+  final guardString = tightGuard.guard({
+    'id': 1,
+    'name': 'this-name-is-way-too-long-for-tight-guard',
+  }, apiUserSchema);
+  integCheck(
+    'INT-11 guard enforces maxStringLength',
+    guardString is FlodFailure &&
+        (guardString as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardMaxStringLength,
+  );
+
+  final tagsSchema = Flod.object({
+    'id': Flod.int(),
+    'name': Flod.string(),
+    'tags': Flod.list(schema: Flod.int()),
+  });
+  final guardArray = JsonGuard(options: JsonGuardOptions(maxArrayLength: 2))
+      .guard({
+        'id': 1,
+        'name': 'Ada',
+        'tags': [1, 2, 3],
+      }, tagsSchema);
+  integCheck(
+    'INT-12 guard enforces maxArrayLength',
+    guardArray is FlodFailure &&
+        (guardArray as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardMaxArrayLength,
+  );
+
+  try {
+    jsonGuard.parseJsonOrThrow('{"id":1,"name":"Ada"}', apiUserSchema);
+    integCheck('INT-13 guard parseJsonOrThrow success path', true);
+  } catch (e) {
+    integCheck('INT-13 guard parseJsonOrThrow success path', false, '$e');
+  }
+
+  // Guard + schema failure (security passed, validation failed)
+  final guardSchemaFail = jsonGuard.parseJson(
+    '{"id":"not-int","name":"Ada"}',
+    apiUserSchema,
+  );
+  integCheck(
+    'INT-14 guard passes security then schema rejects type',
+    guardSchemaFail is FlodFailure &&
+        (guardSchemaFail as FlodFailure).errors.first.code ==
+            FlodErrorCodes.invalidType,
+  );
+
+  // --- 16.3 Dio Interceptor ---
+  final postSchema = Flod.object({'id': Flod.int(), 'title': Flod.string()});
+  final dioInterceptor = FlodValidateInterceptor(
+    schema: postSchema,
+    guard: jsonGuard,
+  );
+
+  final dioValid = FlodValidateInterceptor.validatePayload(
+    raw: {'id': 1, 'title': 'Hello'},
+    schema: postSchema,
+    guard: jsonGuard,
+  );
+  integCheck(
+    'INT-15 dio validatePayload accepts valid response',
+    dioValid is FlodSuccess,
+  );
+
+  final dioInvalid = FlodValidateInterceptor.validatePayload(
+    raw: {'id': 'bad', 'title': 'Hello'},
+    schema: postSchema,
+  );
+  integCheck(
+    'INT-16 dio validatePayload rejects invalid schema',
+    dioInvalid is FlodFailure,
+  );
+
+  // Full onResponse path (real Dio handler)
+  final liveResponse = Response(
+    requestOptions: RequestOptions(path: '/posts/1'),
+    data: {'id': 7, 'title': 'Live'},
+  );
+  final liveHandler = _CapturingResponseHandler();
+  dioInterceptor.onResponse(liveResponse, liveHandler);
+  final liveState = await liveHandler.completedResponse();
+  integCheck(
+    'INT-17 dio onResponse replaces data with validated map',
+    liveState.data is Map && (liveState.data as Map)['id'] == 7,
+  );
+
+  // Nested extractData path
+  final nestedInterceptor = FlodValidateInterceptor(
+    schema: postSchema,
+    extractData: (r) => (r.data as Map)['data'],
+  );
+  final nestedResponse = Response(
+    requestOptions: RequestOptions(path: '/posts/wrapped'),
+    data: {
+      'meta': {'version': 1},
+      'data': {'id': 99, 'title': 'Wrapped'},
+    },
+  );
+  final nestedHandler = _CapturingResponseHandler();
+  nestedInterceptor.onResponse(nestedResponse, nestedHandler);
+  final nestedState = await nestedHandler.completedResponse();
+  integCheck(
+    'INT-18 dio extractData unwraps nested payload',
+    (nestedState.data as Map)['id'] == 99,
+  );
+
+  // Guard blocks malicious payload before schema in dio chain
+  final guardedReject = FlodValidateInterceptor.validatePayload(
+    raw: {
+      'id': 1,
+      'title': 'x',
+      '__proto__': {'admin': true},
+    },
+    schema: postSchema,
+    guard: tightGuard,
+  );
+  integCheck(
+    'INT-19 dio + guard blocks prototype pollution',
+    guardedReject is FlodFailure &&
+        (guardedReject as FlodFailure).errors.first.code ==
+            FlodErrorCodes.guardPrototypeKey,
+  );
+
+  // onResponse reject path
+  final rejectResponse = Response(
+    requestOptions: RequestOptions(path: '/posts/bad'),
+    data: {'id': 'bad', 'title': 'Hello'},
+  );
+  final rejectHandler = _CapturingResponseHandler();
+  dioInterceptor.onResponse(rejectResponse, rejectHandler);
+  var rejectOk = false;
+  try {
+    await rejectHandler.whenComplete();
+  } catch (e) {
+    rejectOk = e.toString().contains('Validation Exception');
+  }
+  integCheck(
+    'INT-20 dio onResponse rejects with ValidationException',
+    rejectOk,
+  );
+
+  print('');
+  print('   📊 INTEGRATIONS: $integPassed passed | $integFailed failed');
+  if (integFailed == 0) {
+    print('   🔗 INTEGRATIONS: ALL CASES HOLD');
+  } else {
+    print('   ⚠️  INTEGRATIONS: REGRESSION DETECTED');
+  }
+  print('');
+
+  // =========================================================================
   // SECTION ULTIMATE: OMNIBUS MEGA-STRESS MATRIX
   // Covers: compile, composition, refine, union, privacy, i18n, abortEarly,
   //         transforms, nested objects, lists, numbers, strings — all at once.
@@ -695,10 +984,9 @@ void main() {
   final baseProfile = Flod.object({
     'displayName': Flod.string().min(2).max(64).trim(),
     'age': Flod.int().min(13).max(120).optional(),
-    'tags': Flod.list(schema: Flod.string().trim())
-        .min(0)
-        .max(10)
-        .uniqueItems(),
+    'tags': Flod.list(
+      schema: Flod.string().trim(),
+    ).min(0).max(10).uniqueItems(),
   });
 
   // --- Composition chain (18.x) ---
@@ -710,9 +998,11 @@ void main() {
           'zip': Flod.string().min(3).max(12),
         }),
       })
-      .merge(Flod.object({
-        'loyaltyPoints': Flod.int().nonNegative().defaultValue(0),
-      }));
+      .merge(
+        Flod.object({
+          'loyaltyPoints': Flod.int().nonNegative().defaultValue(0),
+        }),
+      );
 
   final paymentUnion = Flod.union([
     Flod.object({
@@ -822,7 +1112,10 @@ void main() {
 
   final validRaw = rawCheckoutSchema.safeParse(validCheckoutPayload);
   final validCompiled = compiledCheckout.safeParse(validCheckoutPayload);
-  ultimateCheck('ULT-03 raw schema accepts valid checkout', validRaw is FlodSuccess);
+  ultimateCheck(
+    'ULT-03 raw schema accepts valid checkout',
+    validRaw is FlodSuccess,
+  );
   ultimateCheck(
     'ULT-04 compiled schema accepts valid checkout',
     validCompiled is FlodSuccess,
@@ -851,14 +1144,17 @@ void main() {
   }
 
   // --- Toxic payloads matrix ---
-  final passwordMismatchPayload = Map<String, dynamic>.from(validCheckoutPayload)
-    ..['confirmPassword'] = 'DifferentPassword99';
+  final passwordMismatchPayload = Map<String, dynamic>.from(
+    validCheckoutPayload,
+  )..['confirmPassword'] = 'DifferentPassword99';
 
   final mismatchResult = compiledCheckout.safeParse(passwordMismatchPayload);
   ultimateCheck(
     'ULT-09 refine catches password mismatch',
     mismatchResult is FlodFailure &&
-        (mismatchResult as FlodFailure).errors.any((e) => e.code == 'passwords_match'),
+        (mismatchResult as FlodFailure).errors.any(
+          (e) => e.code == 'passwords_match',
+        ),
   );
   if (mismatchResult case FlodFailure(errors: final mismatchErrors)) {
     ultimateCheck(
@@ -879,7 +1175,9 @@ void main() {
   ultimateCheck(
     'ULT-11 refine catches cart quantity overflow',
     cartResult is FlodFailure &&
-        (cartResult as FlodFailure).errors.any((e) => e.code == 'cart_qty_limit'),
+        (cartResult as FlodFailure).errors.any(
+          (e) => e.code == 'cart_qty_limit',
+        ),
   );
 
   final strictFailPayload = {
@@ -931,8 +1229,11 @@ void main() {
     }
     ultimateCheck('ULT-15 secret() masks PAN/CVV in error logs', !leakDetected);
   } else {
-    ultimateCheck('ULT-15 secret() masks PAN/CVV in error logs', false,
-        'bad payment did not fail');
+    ultimateCheck(
+      'ULT-15 secret() masks PAN/CVV in error logs',
+      false,
+      'bad payment did not fail',
+    );
   }
 
   // --- AbortEarly vs collect-all ---
@@ -942,15 +1243,12 @@ void main() {
     'c': Flod.string().uuid(),
   }).stopOnFirstError().compile();
 
-  final multiErrorPayload = {
-    'a': 'not-email',
-    'b': -1,
-    'c': 'bad-uuid',
-  };
+  final multiErrorPayload = {'a': 'not-email', 'b': -1, 'c': 'bad-uuid'};
   final abortResult = abortSchema.safeParse(multiErrorPayload);
   ultimateCheck(
     'ULT-16 abortEarly stops at first error',
-    abortResult is FlodFailure && (abortResult as FlodFailure).errors.length == 1,
+    abortResult is FlodFailure &&
+        (abortResult as FlodFailure).errors.length == 1,
   );
 
   final collectSchema = Flod.object({
@@ -961,7 +1259,8 @@ void main() {
   final collectResult = collectSchema.safeParse(multiErrorPayload);
   ultimateCheck(
     'ULT-17 collect-all gathers multiple errors',
-    collectResult is FlodFailure && (collectResult as FlodFailure).errors.length >= 2,
+    collectResult is FlodFailure &&
+        (collectResult as FlodFailure).errors.length >= 2,
   );
 
   // --- parse() exception path ---
@@ -986,7 +1285,11 @@ void main() {
     ultimateCheck('ULT-21 getGroupedFieldsMap() non-empty', grouped.isNotEmpty);
     ultimateCheck('ULT-22 toReadable() non-empty', readable.isNotEmpty);
   } else {
-    ultimateCheck('ULT-19..22 i18n/DX outputs', false, 'collectResult not failure');
+    ultimateCheck(
+      'ULT-19..22 i18n/DX outputs',
+      false,
+      'collectResult not failure',
+    );
   }
 
   // --- Performance hot-loop: compiled vs raw parity (100 iterations) ---
@@ -1011,11 +1314,15 @@ void main() {
   );
 
   print('');
-  print('   📊 ULTIMATE MATRIX: $ultimatePassed passed | $ultimateFailed failed');
+  print(
+    '   📊 ULTIMATE MATRIX: $ultimatePassed passed | $ultimateFailed failed',
+  );
   if (ultimateFailed == 0) {
     print('   🏆 OMNIBUS STRESS: ALL INVARIANTS HOLD');
   } else {
-    print('   ⚠️  OMNIBUS STRESS: REGRESSION DETECTED — inspect failures above');
+    print(
+      '   ⚠️  OMNIBUS STRESS: REGRESSION DETECTED — inspect failures above',
+    );
   }
   print('');
 
@@ -1024,3 +1331,12 @@ void main() {
   print("=================================================================");
 }
 
+/// Exposes [ResponseInterceptorHandler.future] for Dio interceptor demos.
+final class _CapturingResponseHandler extends ResponseInterceptorHandler {
+  Future<Response> completedResponse() async {
+    final state = await future;
+    return (state as dynamic).data as Response;
+  }
+
+  Future<void> whenComplete() => future;
+}

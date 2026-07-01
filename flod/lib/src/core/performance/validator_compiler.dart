@@ -1,14 +1,6 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/decorator/default_decorator.dart';
-import 'package:flod/src/core/performance/compiled_validators.dart';
-import 'package:flod/src/validators/list_validator/list_validator.dart';
-import 'package:flod/src/validators/literal_validator/literal_validator.dart';
-import 'package:flod/src/validators/nullable_and_optional_validator/nullable_validator.dart';
-import 'package:flod/src/validators/nullable_and_optional_validator/optional_validator.dart';
-import 'package:flod/src/validators/object_validator/object_validator.dart';
-import 'package:flod/src/validators/refine_validator/refine_validator.dart';
 import 'package:flod/src/validators/transform_validator/transform_validator.dart';
-import 'package:flod/src/validators/union_validator/union_validator.dart';
 
 /// 12.3 Caching — compiles validator trees into optimized runtime forms.
 final class ValidatorCompiler {
@@ -69,6 +61,15 @@ final class ValidatorCompiler {
     }
     if (validator is RefineValidator<T>) {
       return _compileRefine(validator);
+    }
+    if (validator is SuperRefineValidator<T>) {
+      return _compileSuperRefine(validator);
+    }
+    if (validator is AsyncRefineValidator<T>) {
+      return _compileAsyncRefine(validator);
+    }
+    if (validator is AsyncSuperRefineValidator<T>) {
+      return _compileAsyncSuperRefine(validator);
     }
     if (validator is TransformValidator<dynamic, T>) {
       return _compileTransform(validator);
@@ -147,6 +148,39 @@ final class ValidatorCompiler {
       source.customPath,
       source.errorCode,
       source.errorParams,
+      isSecret: source.isSecret,
+    );
+  }
+
+  SuperRefineValidator<T> _compileSuperRefine<T>(
+    SuperRefineValidator<T> source,
+  ) {
+    return SuperRefineValidator<T>(
+      compile(source.inner),
+      source.callback,
+      isSecret: source.isSecret,
+    );
+  }
+
+  AsyncRefineValidator<T> _compileAsyncRefine<T>(
+    AsyncRefineValidator<T> source,
+  ) {
+    return AsyncRefineValidator<T>(
+      compile(source.inner),
+      source.predicate,
+      source.customPath,
+      source.errorCode,
+      source.errorParams,
+      isSecret: source.isSecret,
+    );
+  }
+
+  AsyncSuperRefineValidator<T> _compileAsyncSuperRefine<T>(
+    AsyncSuperRefineValidator<T> source,
+  ) {
+    return AsyncSuperRefineValidator<T>(
+      compile(source.inner),
+      source.callback,
       isSecret: source.isSecret,
     );
   }

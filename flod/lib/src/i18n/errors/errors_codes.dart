@@ -8,6 +8,7 @@ abstract final class FlodErrorCodes {
 
   // Refine
   static const String refineException = 'refine.exception';
+  static const String asyncParseRequired = 'async.parse_required';
 
   // Union
   static const String union = 'union';
@@ -49,4 +50,14 @@ abstract final class FlodErrorCodes {
   static const String listMinItems = 'list.min_items';
   static const String listMaxItems = 'list.max_items';
   static const String listUniqueItems = 'list.unique_items';
+
+  // JSON Guard (integrations)
+  static const String guardInvalidJson = 'guard.invalid_json';
+  static const String guardMaxDepth = 'guard.max_depth';
+  static const String guardMaxKeys = 'guard.max_keys';
+  static const String guardMaxStringLength = 'guard.max_string_length';
+  static const String guardMaxArrayLength = 'guard.max_array_length';
+  static const String guardPrototypeKey = 'guard.prototype_key';
+  static const String guardInvalidKeyType = 'guard.invalid_key_type';
+  static const String guardUnsupportedType = 'guard.unsupported_type';
 }

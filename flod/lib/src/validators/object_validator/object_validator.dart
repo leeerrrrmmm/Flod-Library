@@ -85,7 +85,8 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     final nextSecret = isSecret ?? this.isSecret;
     final nextAbortEarly = abortEarly ?? this.abortEarly;
     return ChainUtils.identityCopy(
-      unchanged: identical(nextSchema, this.schema) &&
+      unchanged:
+          identical(nextSchema, this.schema) &&
           nextMode == this.mode &&
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret &&
@@ -107,6 +108,14 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     FlodPath path = const FlodPath([]),
     bool? abortEarly, // Динамический проброс флага от safeParse верхнего уровня
   }) {
+    FlodDebug.trace(
+      'enter',
+      validator: 'ObjectValidator',
+      path: path,
+      value: value,
+      isSecret: isSecret,
+    );
+
     // Приоритет у динамического флага (например, переданного в safeParse), иначе берем дефолт схемы
     final effectiveAbortEarly = abortEarly ?? this.abortEarly;
 
@@ -139,21 +148,20 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       ]);
     }
 
-    final Map<String, dynamic> transformed = Map<String, dynamic>.from(
-      rawTransformed,
-    );
+    // Read-only access: skip Map.from defensive copy on the hot path.
+    final Map source = rawTransformed;
     final Map<String, dynamic> outputResult = {};
     final errors = <FlodError>[];
 
     // 1. Проверка на избыточные ключи в режиме .strict() (Пункт 3.1 карты)
     if (mode == ObjectMode.strict) {
-      for (final key in transformed.keys) {
+      for (final key in source.keys) {
         if (!schema.containsKey(key)) {
           final error = FlodError(
-            path: path.append(key),
+            path: path.append(key is String ? key : key.toString()),
             code: FlodErrorCodes.objectStrict,
             params: {'key': key},
-            value: isSecret ? null : transformed[key],
+            value: isSecret ? null : source[key],
             isSecret: isSecret,
           );
 
@@ -170,11 +178,12 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     for (final entry in schema.entries) {
       final key = entry.key;
       final validator = entry.value;
-      final effectiveValidator =
-          parentSecret && !validator.isSecret ? validator.secret() : validator;
+      final effectiveValidator = parentSecret && !validator.isSecret
+          ? validator.secret()
+          : validator;
 
-      if (transformed.containsKey(key)) {
-        final fieldValue = transformed[key];
+      if (source.containsKey(key)) {
+        final fieldValue = source[key];
 
         // Рекурсивно прокидываем effectiveAbortEarly вглубь дерева
         final result = effectiveValidator.validate(
@@ -220,17 +229,32 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     }
 
     if (errors.isNotEmpty) {
+      FlodDebug.trace(
+        'fail',
+        validator: 'ObjectValidator',
+        path: path,
+        detail: '${errors.length} error(s)',
+        isSecret: isSecret,
+      );
       return FlodFailure(errors);
     }
 
     // Если всё прошло успешно, подмешиваем невалидируемые ключи в passthrough режиме
     if (mode == ObjectMode.passthrough) {
-      transformed.forEach((key, val) {
+      for (final key in source.keys) {
         if (!schema.containsKey(key)) {
-          outputResult[key] = val;
+          outputResult[key is String ? key : key.toString()] = source[key];
         }
-      });
+      }
     }
+
+    FlodDebug.trace(
+      'ok',
+      validator: 'ObjectValidator',
+      path: path,
+      value: outputResult,
+      isSecret: isSecret,
+    );
 
     return FlodSuccess<Map<String, dynamic>>(outputResult);
   }

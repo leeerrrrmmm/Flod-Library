@@ -1,5 +1,4 @@
 import 'package:flod/flod.dart';
-import 'package:flod/src/core/performance/validator_compiler.dart';
 import 'package:flod/src/validators/transform_validator/transform_validator.dart';
 
 abstract class Validator<T> {

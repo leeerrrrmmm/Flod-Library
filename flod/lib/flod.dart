@@ -3,6 +3,8 @@ library;
 import 'package:flod/flod.dart';
 
 export 'src/cfg/flog_config.dart';
+export 'src/core/async_validator.dart';
+export 'src/core/debug/flod_debug.dart';
 // Core & Results
 export 'src/core/performance/compiled_validators.dart';
 export 'src/core/performance/schema_pool.dart';
@@ -27,6 +29,8 @@ export 'src/validators/number_validator/double_validator.dart';
 export 'src/validators/number_validator/int_validator.dart';
 export 'src/validators/object_validator/object_validator.dart';
 export 'src/validators/refine_validator/refine_validator.dart';
+export 'src/validators/refine_validator/super_refine_context.dart';
+export 'src/validators/refine_validator/super_refine_validator.dart';
 export 'src/validators/string_validator/string_validator.dart';
 export 'src/validators/union_validator/union_validator.dart';
 
@@ -43,6 +47,7 @@ abstract final class Flod {
   static DoubleValidator double() => SchemaPool.double;
 
   /// Валидатор логических значений (bool) (12.1 — shared base instance)
+  /// Zod-compatible: `z.boolean()` → `Flod.boolean()`.
   static BoolValidator boolean() => SchemaPool.boolean;
 
   /// Валидатор списков/коллекций с поддержкой внутренней схемы элементов

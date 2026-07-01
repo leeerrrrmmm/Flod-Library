@@ -1,7 +1,5 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
-import 'package:flod/src/core/validator.dart';
-import 'package:flod/src/validators/object_validator/object_validator.dart';
 
 /// Pre-resolved object field for fast iteration without per-call [secret] wrapping.
 final class CompiledObjectField {
@@ -123,22 +121,22 @@ final class CompiledObjectValidator extends Validator<Map<String, dynamic>> {
       ]);
     }
 
-    final Map<String, dynamic> transformed = Map<String, dynamic>.from(
-      rawTransformed,
-    );
-    final Map<String, dynamic> outputResult = {};
+    // Read-only access: skip Map.from defensive copy (dominant cost in profiles).
+    final Map source = rawTransformed;
+
+    final outputResult = <String, dynamic>{};
     List<FlodError>? errors;
 
     if (mode == ObjectMode.strict) {
-      for (final key in transformed.keys) {
+      for (final key in source.keys) {
         if (!schemaKeys.contains(key)) {
           errors ??= [];
           errors.add(
             FlodError(
-              path: path.append(key),
+              path: path.append(key is String ? key : key.toString()),
               code: FlodErrorCodes.objectStrict,
               params: {'key': key},
-              value: isSecret ? null : transformed[key],
+              value: isSecret ? null : source[key],
               isSecret: isSecret,
             ),
           );
@@ -149,8 +147,8 @@ final class CompiledObjectValidator extends Validator<Map<String, dynamic>> {
 
     for (final field in fields) {
       final key = field.key;
-      final hasKey = transformed.containsKey(key);
-      final fieldValue = hasKey ? transformed[key] : null;
+      final hasKey = source.containsKey(key);
+      final fieldValue = hasKey ? source[key] : null;
 
       final result = field.validator.validate(
         fieldValue,
@@ -172,11 +170,11 @@ final class CompiledObjectValidator extends Validator<Map<String, dynamic>> {
     if (errors != null && errors.isNotEmpty) return FlodFailure(errors);
 
     if (mode == ObjectMode.passthrough) {
-      transformed.forEach((key, val) {
+      for (final key in source.keys) {
         if (!schemaKeys.contains(key)) {
-          outputResult[key.toString()] = val;
+          outputResult[key is String ? key : key.toString()] = source[key];
         }
-      });
+      }
     }
 
     return FlodSuccess(outputResult);
@@ -394,4 +392,3 @@ final class CompiledValidator<T> extends Validator<T> {
     return _inner.validate(value, path: path, abortEarly: abortEarly);
   }
 }
-

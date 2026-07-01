@@ -43,7 +43,8 @@ class StringValidator extends Validator<String> with Transformable<String> {
     final nextTransformers = transformers ?? this.transformers;
     final nextSecret = isSecret ?? this.isSecret;
     return ChainUtils.identityCopy(
-      unchanged: identical(nextRules, this.rules) &&
+      unchanged:
+          identical(nextRules, this.rules) &&
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret,
       current: this,
@@ -70,15 +71,16 @@ class StringValidator extends Validator<String> with Transformable<String> {
     );
   }
 
-  StringValidator fixedLength(int length, {String? code}) {
+  StringValidator length(int length, {String? code}) {
     return _withRule(
       FixedLengthRule(length, code: code ?? FlodErrorCodes.stringFixedLength),
     );
   }
 
-  /// Zod-compatible alias for [fixedLength].
-  StringValidator length(int length, {String? code}) =>
-      fixedLength(length, code: code);
+  /// Deprecated — use [length].
+  @Deprecated('Use length() instead.')
+  StringValidator fixedLength(int len, {String? code}) =>
+      length(len, code: code);
 
   StringValidator regex(RegExp pattern, {String? code}) {
     return _withRule(

@@ -1,5 +1,5 @@
 name: flod
-description: A starting point for Dart libraries or applications.
+description: Strict, fast, type-safe data validation and transformation for Dart and Flutter.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 
@@ -9,7 +9,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   meta: ^1.18.3
-  # path: ^1.9.0
+  dio: ^5.7.0
 
 dev_dependencies:
   lints: ^6.0.0

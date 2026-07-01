@@ -67,6 +67,26 @@ abstract final class FlodDefaultLocale {
         return 'List must contain at most ${params['limit']} items.';
       case FlodErrorCodes.listUniqueItems:
         return 'All list items must be unique.';
+      case FlodErrorCodes.refineException:
+        return 'Custom refine check failed.';
+      case FlodErrorCodes.asyncParseRequired:
+        return 'This schema requires safeParseAsync() or parseAsync().';
+      case FlodErrorCodes.guardInvalidJson:
+        return 'Invalid JSON payload.';
+      case FlodErrorCodes.guardMaxDepth:
+        return 'JSON exceeds maximum nesting depth of ${params['limit']}.';
+      case FlodErrorCodes.guardMaxKeys:
+        return 'JSON exceeds maximum key count of ${params['limit']}.';
+      case FlodErrorCodes.guardMaxStringLength:
+        return 'String exceeds maximum length of ${params['limit']}.';
+      case FlodErrorCodes.guardMaxArrayLength:
+        return 'Array exceeds maximum length of ${params['limit']}.';
+      case FlodErrorCodes.guardPrototypeKey:
+        return 'Blocked unsafe key: ${params['key']}.';
+      case FlodErrorCodes.guardInvalidKeyType:
+        return 'Object key must be a string, got ${params['actual']}.';
+      case FlodErrorCodes.guardUnsupportedType:
+        return 'Unsupported JSON value type: ${params['actual']}.';
       default:
         return 'Invalid value.';
     }
