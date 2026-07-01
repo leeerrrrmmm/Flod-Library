@@ -49,3 +49,16 @@ class FlodFailure<Out> extends ParseResult<Out> {
     return map;
   }
 }
+
+extension ParseResultReadable<T> on ParseResult<T> {
+  String toReadable({FlodI18nResolver? customResolver}) {
+    if (this is FlodSuccess<T>) {
+      final success = this as FlodSuccess<T>;
+      return success.data.toString();
+    }
+
+    final failure = this as FlodFailure<T>;
+
+    return failure.getMessages(customResolver: customResolver).join('\n');
+  }
+}

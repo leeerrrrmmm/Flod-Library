@@ -6,8 +6,6 @@ abstract class Validator<T> {
   const Validator({this.isSecret = false});
 
   Validator<T> secret();
-
-  // ДОБАВЛЯЕМ В КОНТРАКТ: чтобы цепочки методов не ломали .strict() и .stopOnFirstError()
   Validator<T> strict() => this;
   Validator<T> stopOnFirstError() => this;
 

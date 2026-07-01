@@ -6,6 +6,9 @@ abstract final class FlodErrorCodes {
   static const String invalidType = 'invalid_type';
   static const String transformError = 'transform.error';
 
+  // Refine
+  static const String refineException = 'refine.exception';
+
   // Union
   static const String union = 'union';
   static const String invalidUnionType = 'union.invalid_type';

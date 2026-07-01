@@ -1,21 +1,12 @@
 library;
 
-import 'src/core/validator.dart';
-import 'src/i18n/resolver.dart';
-import 'src/validators/bool_validator/bool_validator.dart';
-import 'src/validators/list_validator/list_validator.dart';
-import 'src/validators/literal_validator/literal_validator.dart';
-import 'src/validators/number_validator/double_validator.dart';
-import 'src/validators/number_validator/int_validator.dart';
-import 'src/validators/object_validator/object_validator.dart';
-import 'src/validators/string_validator/string_validator.dart';
-import 'src/validators/union_validator/union_validator.dart';
+import 'package:flod/flod.dart';
 
+export 'src/cfg/flog_config.dart';
 // Core & Results
 export 'src/core/validator.dart';
 // Самое важное: Экспорт всех расширений (.nullable(), .optional() и т.д.)
 export 'src/extensions/all_extensions.dart';
-export 'src/cfg/flog_config.dart';
 export 'src/i18n/errors/errors_codes.dart';
 export 'src/i18n/resolver.dart';
 export 'src/res/parse_result.dart';
@@ -32,6 +23,7 @@ export 'src/validators/number_validator/base_number_validator.dart';
 export 'src/validators/number_validator/double_validator.dart';
 export 'src/validators/number_validator/int_validator.dart';
 export 'src/validators/object_validator/object_validator.dart';
+export 'src/validators/refine_validator/refine_validator.dart';
 export 'src/validators/string_validator/string_validator.dart';
 export 'src/validators/union_validator/union_validator.dart';
 
@@ -48,7 +40,7 @@ abstract final class Flod {
   static DoubleValidator double() => DoubleValidator();
 
   /// Валидатор логических значений (bool)
-  static BoolValidator bool() => BoolValidator();
+  static BoolValidator boolean() => BoolValidator();
 
   /// Валидатор списков/коллекций с поддержкой внутренней схемы элементов
   static ListValidator<T> list<T>({Validator<T>? schema}) =>
@@ -58,19 +50,24 @@ abstract final class Flod {
   static ObjectValidator object(Map<String, Validator> schema) =>
       ObjectValidator(schema);
 
+  /// Валидатор объектов (Map< String, dynamic >) со строгой структурой ключей и условными валидациями
+  static Validator<Map<String, dynamic>> refineObject(
+    Map<String, Validator> schema,
+    bool Function(Map<String, dynamic> value) predicate, {
+    List<String>? path,
+    String? code,
+    Map<String, dynamic>? params,
+  }) => ObjectValidator(
+    schema,
+  ).refine(predicate, path: path, code: code, params: params);
+
   /// Валидатор Union-типов (объединений) для полиморфных структур
   static UnionValidator union(List<Validator> schemas) =>
       UnionValidator(schemas);
 
   /// Валидатор строго фиксированных литеральных значений (enum-like или константы)
-  static LiteralValidator<T> literal<T>(
-    T expectedValue, {
-    String? code,
-  }) {
-    return LiteralValidator<T>(
-      expectedValue,
-      customCode: code,
-    );
+  static LiteralValidator<T> literal<T>(T expectedValue, {String? code}) {
+    return LiteralValidator<T>(expectedValue, customCode: code);
   }
 
   /// Фабрика для сборки кастомных локализаторов (например, украинского ukrainianResolver)
