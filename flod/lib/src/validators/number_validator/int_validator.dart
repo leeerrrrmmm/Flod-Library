@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/rules/numbers/base_number_rule.dart';
 import 'package:flod/src/rules/numbers/custom_number_rule.dart';
@@ -19,47 +20,49 @@ class IntValidator extends Validator<int> with Transformable<int> {
   ]) : super(isSecret: isSecret);
 
   @override
-  IntValidator secret() => copyWith(isSecret: true);
+  bool get isPure => rules.isEmpty && transformers.isEmpty && !isSecret;
+
+  @override
+  IntValidator secret() => isSecret ? this : copyWith(isSecret: true);
 
   IntValidator copyWith({
     List<BaseNumberRule<int>>? rules,
     List<Transformer<int>>? transformers,
     bool? isSecret,
   }) {
-    return IntValidator(
-      rules ?? this.rules,
-      transformers ?? this.transformers,
-      isSecret ?? this.isSecret,
+    final nextRules = rules ?? this.rules;
+    final nextTransformers = transformers ?? this.transformers;
+    final nextSecret = isSecret ?? this.isSecret;
+    return ChainUtils.identityCopy(
+      unchanged: identical(nextRules, this.rules) &&
+          identical(nextTransformers, this.transformers) &&
+          nextSecret == this.isSecret,
+      current: this,
+      create: () => IntValidator(nextRules, nextTransformers, nextSecret),
     );
   }
 
+  IntValidator _withRule(BaseNumberRule<int> rule) =>
+      copyWith(rules: ChainUtils.append(rules, rule));
+
   IntValidator min(int minBound, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        MinValueRule<int>(minBound, code: code ?? FlodErrorCodes.numberMin),
-      ],
+    return _withRule(
+      MinValueRule<int>(minBound, code: code ?? FlodErrorCodes.numberMin),
     );
   }
 
   IntValidator max(int maxBound, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        MaxValueRule<int>(maxBound, code: code ?? FlodErrorCodes.numberMax),
-      ],
+    return _withRule(
+      MaxValueRule<int>(maxBound, code: code ?? FlodErrorCodes.numberMax),
     );
   }
 
   IntValidator multipleOf(int factor, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        MultipleOfRule<int>(
-          factor,
-          code: code ?? FlodErrorCodes.numberMultipleOf,
-        ),
-      ],
+    return _withRule(
+      MultipleOfRule<int>(
+        factor,
+        code: code ?? FlodErrorCodes.numberMultipleOf,
+      ),
     );
   }
 
@@ -68,11 +71,8 @@ class IntValidator extends Validator<int> with Transformable<int> {
     required String code,
     Map<String, dynamic>? metaParams,
   }) {
-    return copyWith(
-      rules: [
-        ...rules,
-        CustomNumberRule<int>(predicate, code: code, metaParams: metaParams),
-      ],
+    return _withRule(
+      CustomNumberRule<int>(predicate, code: code, metaParams: metaParams),
     );
   }
 
@@ -106,18 +106,24 @@ class IntValidator extends Validator<int> with Transformable<int> {
   }) {
     dynamic preparedValue = value;
 
-    try {
-      preparedValue = applyTransforms(preparedValue, path);
-    } catch (_) {
-      return _makeTypeFailure(isSecret ? null : value, path);
+    if (transformers.isNotEmpty) {
+      try {
+        preparedValue = applyTransforms(preparedValue, path);
+      } catch (_) {
+        return _makeTypeFailure(isSecret ? null : value, path);
+      }
     }
 
     if (preparedValue is! int) {
       return _makeTypeFailure(isSecret ? null : preparedValue, path);
     }
 
+    // 12.2 fast path
+    if (isPure) return FlodSuccess<int>(preparedValue);
+
     final int finalValue = preparedValue;
     final errors = <FlodError>[];
+    final shouldAbort = abortEarly ?? false;
 
     for (final rule in rules) {
       if (!rule.check(finalValue)) {
@@ -130,6 +136,7 @@ class IntValidator extends Validator<int> with Transformable<int> {
             isSecret: isSecret,
           ),
         );
+        if (shouldAbort) return FlodFailure<int>(errors);
       }
     }
 

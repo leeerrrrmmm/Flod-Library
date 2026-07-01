@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 
 /// Строго типизированный валидатор списков/коллекций.
@@ -22,6 +23,15 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
   });
 
   @override
+  bool get isPure =>
+      schema == null &&
+      minItemsLength == null &&
+      maxItemsLength == null &&
+      !isUnique &&
+      transformers.isEmpty &&
+      !isSecret;
+
+  @override
   ListValidator<T> secret() => copyWith(isSecret: true);
 
   ListValidator<T> copyWith({
@@ -32,13 +42,28 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     List<Transformer<List<T>>>? transformers,
     bool? isSecret,
   }) {
-    return ListValidator<T>(
-      schema: schema ?? this.schema,
-      minItemsLength: minItemsLength ?? this.minItemsLength,
-      maxItemsLength: maxItemsLength ?? this.maxItemsLength,
-      isUnique: isUnique ?? this.isUnique,
-      transformers: transformers ?? this.transformers,
-      isSecret: isSecret ?? this.isSecret,
+    final nextSchema = schema ?? this.schema;
+    final nextMin = minItemsLength ?? this.minItemsLength;
+    final nextMax = maxItemsLength ?? this.maxItemsLength;
+    final nextUnique = isUnique ?? this.isUnique;
+    final nextTransformers = transformers ?? this.transformers;
+    final nextSecret = isSecret ?? this.isSecret;
+    return ChainUtils.identityCopy(
+      unchanged: identical(nextSchema, this.schema) &&
+          nextMin == this.minItemsLength &&
+          nextMax == this.maxItemsLength &&
+          nextUnique == this.isUnique &&
+          identical(nextTransformers, this.transformers) &&
+          nextSecret == this.isSecret,
+      current: this,
+      create: () => ListValidator<T>(
+        schema: nextSchema,
+        minItemsLength: nextMin,
+        maxItemsLength: nextMax,
+        isUnique: nextUnique,
+        transformers: nextTransformers,
+        isSecret: nextSecret,
+      ),
     );
   }
 
@@ -85,8 +110,26 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
       ]);
     }
 
-    // Безопасное приведение к Iterable для выполнения трансформаций
     final List<dynamic> rawList = input;
+
+    // 12.2 fast path — untyped list passthrough
+    if (isPure) {
+      try {
+        return FlodSuccess<List<T>>(List<T>.from(rawList));
+      } catch (_) {
+        return FlodFailure([
+          FlodError(
+            path: path,
+            code: FlodErrorCodes.invalidType,
+            params: {'expected': 'List<$T>', 'actual': 'List<Dynamic>'},
+            value: input,
+            isSecret: isSecret,
+          ),
+        ]);
+      }
+    }
+
+    // Безопасное приведение к Iterable для выполнения трансформаций
 
     // 2. Применяем пайплайн трансформаций (работаем с типизированным списком)
     // Преобразуем исходный список к List<T> перед применением трансформеров,
@@ -136,46 +179,48 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
       );
     }
 
-    final List<T> outputList = [];
+    final len = baseList.length;
+    final List<T?> outputList = List<T?>.filled(len, null);
 
     // 4. Поэлементная валидация по вложенной схеме (schema)
-    for (int i = 0; i < baseList.length; i++) {
+    // 12.2 — hoist secret schema once per validation
+    final effectiveSchema = isSecret && schema != null ? schema!.secret() : schema;
+
+    for (int i = 0; i < len; i++) {
       final nextPath = path.append(i);
       final item = baseList[i];
 
-      if (schema != null) {
-        // Передаем статус секретности вглубь
-        final currentSchema = isSecret ? schema!.secret() : schema!;
-        final res = currentSchema.validate(
+      if (effectiveSchema != null) {
+        final res = effectiveSchema.validate(
           item,
           path: nextPath,
           abortEarly: abortEarly,
         );
 
         if (res is FlodSuccess<T>) {
-          outputList.add(res.data);
+          outputList[i] = res.data;
         } else if (res is FlodFailure<T>) {
-          // ЯВНО добавили <T> здесь
-          // Теперь Dart гарантирует Smart Cast и видит поле `.errors`
           errors.addAll(res.errors);
-          outputList.add(item);
+          outputList[i] = item;
         }
       } else {
-        outputList.add(item);
+        outputList[i] = item;
       }
     }
+
+    final validatedList = List<T>.from(outputList);
 
     // 5. Проверяем уникальность ТОЛЬКО если дочерние элементы успешно свалидировались.
     if (isUnique && errors.isEmpty) {
       final seen = <T>{};
-      for (int i = 0; i < outputList.length; i++) {
-        if (!seen.add(outputList[i])) {
+      for (int i = 0; i < validatedList.length; i++) {
+        if (!seen.add(validatedList[i])) {
           errors.add(
             FlodError(
               path: path.append(i),
               code: FlodErrorCodes.listUniqueItems,
               params: {'index': i},
-              value: outputList[i],
+              value: validatedList[i],
               isSecret: isSecret,
             ),
           );
@@ -184,7 +229,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     }
 
     return errors.isEmpty
-        ? FlodSuccess<List<T>>(outputList)
+        ? FlodSuccess<List<T>>(validatedList)
         : FlodFailure<List<T>>(errors);
   }
 }

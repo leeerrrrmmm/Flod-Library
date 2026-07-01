@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/rules/regexp/regex_rule.dart';
 import 'package:flod/src/rules/string/base_string_rule.dart';
@@ -13,6 +14,10 @@ class StringValidator extends Validator<String> with Transformable<String> {
   @override
   final List<Transformer<String>> transformers;
 
+  static String _trim(dynamic v) => (v as String).trim();
+  static String _toLower(dynamic v) => (v as String).toLowerCase();
+  static String _toUpper(dynamic v) => (v as String).toUpperCase();
+
   const StringValidator([
     this.rules = const [],
     this.transformers = const [],
@@ -20,52 +25,54 @@ class StringValidator extends Validator<String> with Transformable<String> {
   ]) : super(isSecret: isSecret);
 
   @override
-  StringValidator secret() => copyWith(isSecret: true);
+  bool get isPure => rules.isEmpty && transformers.isEmpty && !isSecret;
 
-  StringValidator trim() => _copyWithTransform((v) => v.trim());
-  StringValidator toLowerCase() => _copyWithTransform((v) => v.toLowerCase());
-  StringValidator toUpperCase() => _copyWithTransform((v) => v.toUpperCase());
+  @override
+  StringValidator secret() => isSecret ? this : copyWith(isSecret: true);
+
+  StringValidator trim() => _copyWithTransform(_trim);
+  StringValidator toLowerCase() => _copyWithTransform(_toLower);
+  StringValidator toUpperCase() => _copyWithTransform(_toUpper);
 
   StringValidator copyWith({
     List<BaseStringRule>? rules,
     List<Transformer<String>>? transformers,
     bool? isSecret,
   }) {
-    return StringValidator(
-      rules ?? this.rules,
-      transformers ?? this.transformers,
-      isSecret ?? this.isSecret,
+    final nextRules = rules ?? this.rules;
+    final nextTransformers = transformers ?? this.transformers;
+    final nextSecret = isSecret ?? this.isSecret;
+    return ChainUtils.identityCopy(
+      unchanged: identical(nextRules, this.rules) &&
+          identical(nextTransformers, this.transformers) &&
+          nextSecret == this.isSecret,
+      current: this,
+      create: () => StringValidator(nextRules, nextTransformers, nextSecret),
     );
   }
 
   StringValidator _copyWithTransform(Transformer<String> transform) {
-    return copyWith(transformers: [...transformers, transform]);
+    return copyWith(transformers: ChainUtils.append(transformers, transform));
   }
 
+  StringValidator _withRule(BaseStringRule rule) =>
+      copyWith(rules: ChainUtils.append(rules, rule));
+
   StringValidator min(int length, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        MinLengthRule(length, code: code ?? FlodErrorCodes.stringMin),
-      ],
+    return _withRule(
+      MinLengthRule(length, code: code ?? FlodErrorCodes.stringMin),
     );
   }
 
   StringValidator max(int length, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        MaxLengthRule(length, code: code ?? FlodErrorCodes.stringMax),
-      ],
+    return _withRule(
+      MaxLengthRule(length, code: code ?? FlodErrorCodes.stringMax),
     );
   }
 
   StringValidator fixedLength(int length, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        FixedLengthRule(length, code: code ?? FlodErrorCodes.stringFixedLength),
-      ],
+    return _withRule(
+      FixedLengthRule(length, code: code ?? FlodErrorCodes.stringFixedLength),
     );
   }
 
@@ -74,11 +81,8 @@ class StringValidator extends Validator<String> with Transformable<String> {
       fixedLength(length, code: code);
 
   StringValidator regex(RegExp pattern, {String? code}) {
-    return copyWith(
-      rules: [
-        ...rules,
-        RegexRule(pattern, code: code ?? FlodErrorCodes.stringRegex),
-      ],
+    return _withRule(
+      RegexRule(pattern, code: code ?? FlodErrorCodes.stringRegex),
     );
   }
 
@@ -158,11 +162,8 @@ class StringValidator extends Validator<String> with Transformable<String> {
     required String code,
     Map<String, dynamic>? metaParams,
   }) {
-    return copyWith(
-      rules: [
-        ...rules,
-        CustomStringRule(predicate, code: code, metaParams: metaParams),
-      ],
+    return _withRule(
+      CustomStringRule(predicate, code: code, metaParams: metaParams),
     );
   }
 
@@ -187,8 +188,17 @@ class StringValidator extends Validator<String> with Transformable<String> {
       ]);
     }
 
-    final String transformed = applyTransforms(value, path);
+    // 12.2 fast path — pure string type check only
+    if (isPure) return FlodSuccess<String>(value);
+
+    final String transformed = transformers.isEmpty
+        ? value
+        : applyTransforms(value, path);
+
+    if (rules.isEmpty) return FlodSuccess<String>(transformed);
+
     final errors = <FlodError>[];
+    final shouldAbort = abortEarly ?? false;
 
     for (final rule in rules) {
       if (!rule.check(transformed)) {
@@ -201,6 +211,7 @@ class StringValidator extends Validator<String> with Transformable<String> {
             isSecret: isSecret,
           ),
         );
+        if (shouldAbort) return FlodFailure<String>(errors);
       }
     }
 

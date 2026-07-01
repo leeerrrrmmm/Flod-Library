@@ -5,6 +5,12 @@ class TransformValidator<In, Out> extends Validator<Out> {
   final Validator<In> _parent;
   final Out Function(In value) _transformer;
 
+  /// Parent validator for [ValidatorCompiler].
+  Validator<In> get parent => _parent;
+
+  /// Transform callback for [ValidatorCompiler].
+  Out Function(In value) get callback => _transformer;
+
   TransformValidator(this._parent, this._transformer, {super.isSecret});
 
   @override

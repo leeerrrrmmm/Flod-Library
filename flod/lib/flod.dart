@@ -4,6 +4,9 @@ import 'package:flod/flod.dart';
 
 export 'src/cfg/flog_config.dart';
 // Core & Results
+export 'src/core/performance/compiled_validators.dart';
+export 'src/core/performance/schema_pool.dart';
+export 'src/core/performance/validator_compiler.dart';
 export 'src/core/validator.dart';
 // Самое важное: Экспорт всех расширений (.nullable(), .optional() и т.д.)
 export 'src/extensions/all_extensions.dart';
@@ -30,17 +33,17 @@ export 'src/validators/union_validator/union_validator.dart';
 /// Главная точка входа в библиотеку Flod.
 /// Предоставляет удобный и лаконичный API для декларативного создания схем.
 abstract final class Flod {
-  /// Валидатор строковых данных
-  static StringValidator string() => StringValidator();
+  /// Валидатор строковых данных (12.1 — shared base instance)
+  static StringValidator string() => SchemaPool.string;
 
-  /// Валидатор целочисленных значений (int)
-  static IntValidator int() => IntValidator();
+  /// Валидатор целочисленных значений (int) (12.1 — shared base instance)
+  static IntValidator int() => SchemaPool.int;
 
-  /// Валидатор чисел с плавающей точкой (double)
-  static DoubleValidator double() => DoubleValidator();
+  /// Валидатор чисел с плавающей точкой (double) (12.1 — shared base instance)
+  static DoubleValidator double() => SchemaPool.double;
 
-  /// Валидатор логических значений (bool)
-  static BoolValidator boolean() => BoolValidator();
+  /// Валидатор логических значений (bool) (12.1 — shared base instance)
+  static BoolValidator boolean() => SchemaPool.boolean;
 
   /// Валидатор списков/коллекций с поддержкой внутренней схемы элементов
   static ListValidator<T> list<T>({Validator<T>? schema}) =>

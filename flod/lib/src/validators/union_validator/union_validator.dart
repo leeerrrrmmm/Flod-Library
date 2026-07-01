@@ -52,12 +52,6 @@ class UnionValidator<T> extends Validator<T> with Transformable<T> {
     final index = <Object?, Validator>{};
 
     for (final schema in schemas) {
-      if (schema is! ObjectValidator) {
-        throw StateError(
-          'Discriminated union requires ObjectValidator schemas only.',
-        );
-      }
-
       final field = schema.getFieldSchema(key);
 
       if (field == null) {

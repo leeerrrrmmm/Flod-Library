@@ -5,6 +5,9 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
   final Validator<T> _inner;
   final T defaultValue;
 
+  /// Inner validator for [ValidatorCompiler].
+  Validator<T> get inner => _inner;
+
   @override
   final List<Transformer<T>> transformers;
 
@@ -14,6 +17,9 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
     this.transformers = const [],
     super.isSecret = false,
   });
+
+  @override
+  bool get isPure => _inner.isPure && transformers.isEmpty && !isSecret;
 
   @override
   DefaultDecorator<T> secret() {

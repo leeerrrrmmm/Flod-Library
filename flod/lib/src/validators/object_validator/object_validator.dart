@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/validators/object_validator/object_composition.dart';
 
@@ -20,6 +21,14 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     super.isSecret = false,
     this.abortEarly = false,
   });
+
+  @override
+  bool get isPure =>
+      schema.isEmpty &&
+      transformers.isEmpty &&
+      mode == ObjectMode.passthrough &&
+      !abortEarly &&
+      !isSecret;
 
   @override
   Validator? getFieldSchema(String key) => schema[key];
@@ -70,12 +79,25 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     bool? isSecret,
     bool? abortEarly,
   }) {
-    return ObjectValidator(
-      schema ?? this.schema,
-      mode: mode ?? this.mode,
-      transformers: transformers ?? this.transformers,
-      isSecret: isSecret ?? this.isSecret,
-      abortEarly: abortEarly ?? this.abortEarly,
+    final nextSchema = schema ?? this.schema;
+    final nextMode = mode ?? this.mode;
+    final nextTransformers = transformers ?? this.transformers;
+    final nextSecret = isSecret ?? this.isSecret;
+    final nextAbortEarly = abortEarly ?? this.abortEarly;
+    return ChainUtils.identityCopy(
+      unchanged: identical(nextSchema, this.schema) &&
+          nextMode == this.mode &&
+          identical(nextTransformers, this.transformers) &&
+          nextSecret == this.isSecret &&
+          nextAbortEarly == this.abortEarly,
+      current: this,
+      create: () => ObjectValidator(
+        nextSchema,
+        mode: nextMode,
+        transformers: nextTransformers,
+        isSecret: nextSecret,
+        abortEarly: nextAbortEarly,
+      ),
     );
   }
 
@@ -143,12 +165,13 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     }
 
     // 2. Основной цикл обхода полей схемы
+    // 12.2 — pre-resolve secret wrappers once per validation
+    final parentSecret = isSecret;
     for (final entry in schema.entries) {
       final key = entry.key;
       final validator = entry.value;
-
-      // Прокидываем приватность родителя дочернему валидатору (Пункт 22 карты)
-      final effectiveValidator = isSecret ? validator.secret() : validator;
+      final effectiveValidator =
+          parentSecret && !validator.isSecret ? validator.secret() : validator;
 
       if (transformed.containsKey(key)) {
         final fieldValue = transformed[key];

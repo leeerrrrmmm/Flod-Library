@@ -7,6 +7,24 @@ class RefineValidator<T> extends Validator<T> {
   final String _code;
   final Map<String, dynamic>? _params;
 
+  /// Inner validator wrapped by this refine layer.
+  Validator<T> get inner => _inner;
+
+  @override
+  bool get isCompiled => _inner.isCompiled;
+
+  /// Predicate for [ValidatorCompiler].
+  bool Function(T value) get predicate => _predicate;
+
+  /// Custom error path for [ValidatorCompiler].
+  List<String>? get customPath => _customPath;
+
+  /// Error code for [ValidatorCompiler].
+  String get errorCode => _code;
+
+  /// Error params for [ValidatorCompiler].
+  Map<String, dynamic>? get errorParams => _params;
+
   RefineValidator(
     this._inner,
     this._predicate,

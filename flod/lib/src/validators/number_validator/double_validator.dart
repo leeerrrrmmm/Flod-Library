@@ -1,4 +1,5 @@
 import 'package:flod/flod.dart';
+import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 import 'package:flod/src/rules/numbers/base_number_rule.dart';
 
@@ -15,11 +16,13 @@ class DoubleValidator extends BaseNumberValidator<double>
   ]);
 
   @override
-  DoubleValidator secret() => copyWith(rules, isSecret: true);
+  bool get isPure => rules.isEmpty && transformers.isEmpty && !isSecret;
 
-  /// Иммутабельный метод добавления трансформации для дробных чисел
+  @override
+  DoubleValidator secret() => isSecret ? this : copyWith(rules, isSecret: true);
+
   DoubleValidator _copyWithTransform(Transformer<double> transform) {
-    return copyWith(rules, transformers: [...transformers, transform]);
+    return copyWith(rules, transformers: ChainUtils.append(transformers, transform));
   }
 
   // =========================================================================
@@ -39,10 +42,14 @@ class DoubleValidator extends BaseNumberValidator<double>
     List<Transformer<double>>? transformers,
     bool? isSecret,
   }) {
-    return DoubleValidator(
-      rules,
-      transformers ?? this.transformers,
-      isSecret ?? this.isSecret,
+    final nextTransformers = transformers ?? this.transformers;
+    final nextSecret = isSecret ?? this.isSecret;
+    return ChainUtils.identityCopy(
+      unchanged: identical(rules, this.rules) &&
+          identical(nextTransformers, this.transformers) &&
+          nextSecret == this.isSecret,
+      current: this,
+      create: () => DoubleValidator(rules, nextTransformers, nextSecret),
     );
   }
 
@@ -88,8 +95,24 @@ class DoubleValidator extends BaseNumberValidator<double>
       ]);
     }
 
-    // EXECUTION ORDER (5.3): Прогоняем число через пайплайн трансформаций
-    final dynamic rawTransformed = applyTransforms(value, path);
+    if (!value.isFinite) {
+      return FlodFailure([
+        FlodError(
+          path: path,
+          code: FlodErrorCodes.invalidNumber,
+          params: {'value': value},
+          value: isSecret ? null : value,
+          isSecret: isSecret,
+        ),
+      ]);
+    }
+
+    // 12.2 fast path — pure double type check only (after finite guard)
+    if (isPure) return FlodSuccess<double>(value);
+
+    final dynamic rawTransformed = transformers.isEmpty
+        ? value
+        : applyTransforms(value, path);
     final double transformed = rawTransformed as double;
 
     // ЗАЩИТА 2: Проверяем на Finite / NaN уже трансформированное число
