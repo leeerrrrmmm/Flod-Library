@@ -49,12 +49,12 @@ class DefaultDecorator<T> extends Validator<T> with Transformable<T> {
   ParseResult<T> validate(dynamic value, {FlodPath path = const FlodPath([]), bool? abortEarly}) {
     final dynamic transformed = applyTransforms(value, path);
 
-    // Если значение отсутствует (null), возвращаем дефолт
+    // If value is missing (null), return default
     if (transformed == null) {
       return FlodSuccess(defaultValue);
     }
 
-    // Иначе идем вглубь
+    // Otherwise delegate inward
     final result = _inner.validate(transformed, path: path, abortEarly: abortEarly);
     return result;
   }

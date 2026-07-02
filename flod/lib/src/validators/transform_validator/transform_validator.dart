@@ -15,7 +15,7 @@ class TransformValidator<In, Out> extends Validator<Out> {
 
   @override
   Validator<Out> secret() {
-    // Рекурсивно прокидываем приватность по всей цепочке трансформаций вверх
+    // Recursively propagate privacy up the entire transform chain
     return TransformValidator<In, Out>(
       _parent.secret(),
       _transformer,
@@ -35,12 +35,12 @@ class TransformValidator<In, Out> extends Validator<Out> {
       abortEarly: abortEarly,
     );
 
-    // Вычисляем результирующую приватность слоя
+    // Compute resulting layer privacy
     final bool currentSecret = isSecret || _parent.isSecret;
 
     switch (parentResult) {
       case FlodFailure<In>(errors: final errs):
-        // Если родитель упал и слой секретный — маскируем его ошибки на выходе
+        // If parent failed and layer is secret — mask its errors on output
         if (currentSecret) {
           final obfuscated = errs
               .map(

@@ -3,7 +3,7 @@ import 'package:flod/flod.dart';
 typedef Transformer<T> = T Function(dynamic value);
 
 mixin Transformable<T> {
-  // Миксин больше ничего не хранит сам. Он лишь требует список от наследника
+  // Mixin stores nothing itself. It only requires a list from the subclass
   List<Transformer<T>> get transformers;
 
   dynamic applyTransforms(dynamic initialValue, FlodPath path) {
@@ -11,10 +11,10 @@ mixin Transformable<T> {
     for (final transformer in transformers) {
       final result = transformer(current);
 
-      // Если трансформер вернул ошибку вложенной валидации — перехватываем её!
+      // If transformer returned nested validation failure — intercept it!
       if (result is FlodFailure) {
-        // Бросаем специальный внутренний Exception, который ядро валидатора
-        // перехватит и корректно добавит в общий массив ошибок.
+        // Throw a special internal Exception that validator core
+        // will catch and add to the shared error array.
         throw FlodTransformerException(result.errors);
       }
 
@@ -24,7 +24,7 @@ mixin Transformable<T> {
   }
 }
 
-/// Специальное исключение для прерывания пайплайна трансформаций
+/// Special exception for interrupting the transform pipeline
 class FlodTransformerException implements Exception {
   final List<FlodError> errors;
   const FlodTransformerException(this.errors);

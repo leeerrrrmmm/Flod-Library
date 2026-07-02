@@ -18,7 +18,7 @@
 //     throw StateError('Try to get errors from FlodSuccess');
 //   }
 
-//   // Позволяет удобно прокинуть результат дальше
+//   // Conveniently forward the result further
 //   R fold<R>(
 //     R Function(List<FlodError> errors) onFailure,
 //     R Function(T data) onSuccess,
@@ -29,7 +29,7 @@
 //     };
 //   }
 
-//   // Полезно для цепочек: если успех, делаем что-то еще
+//   // Useful for chains: if success, do something else
 //   ValidationResult<R> map<R>(R Function(T data) transform) {
 //     return switch (this) {
 //       FlodFailure(errors: final e) => FlodFailure(e),
@@ -50,6 +50,6 @@
 //   final List<FlodError> errors;
 
 //   const FlodFailure(this.errors);
-//   // Фабрика для быстрого создания одной ошибки (идеально для abortEarly)
+//   // Factory for quickly creating a single error (ideal for abortEarly)
 //   factory FlodFailure.single(FlodError error) => FlodFailure([error]);
 // }

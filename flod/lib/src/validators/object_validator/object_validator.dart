@@ -106,7 +106,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
   ParseResult<Map<String, dynamic>> validate(
     dynamic value, {
     FlodPath path = const FlodPath([]),
-    bool? abortEarly, // Динамический проброс флага от safeParse верхнего уровня
+    bool? abortEarly, // Dynamic flag propagation from top-level safeParse
   }) {
     FlodDebug.trace(
       'enter',
@@ -116,7 +116,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       isSecret: isSecret,
     );
 
-    // Приоритет у динамического флага (например, переданного в safeParse), иначе берем дефолт схемы
+    // Dynamic flag takes priority (e.g. from safeParse), otherwise use schema default
     final effectiveAbortEarly = abortEarly ?? this.abortEarly;
 
     if (value is! Map) {
@@ -131,7 +131,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       ]);
     }
 
-    // Выполняем трансформации строго ДО валидации (Пункт 5.3 карты)
+    // Apply transforms strictly BEFORE validation (Map section 5.3)
     final dynamic rawTransformed = applyTransforms(value, path);
     if (rawTransformed is! Map) {
       return FlodFailure([
@@ -153,7 +153,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
     final Map<String, dynamic> outputResult = {};
     final errors = <FlodError>[];
 
-    // 1. Проверка на избыточные ключи в режиме .strict() (Пункт 3.1 карты)
+    // 1. Check for extra keys in .strict() mode (Map section 3.1)
     if (mode == ObjectMode.strict) {
       for (final key in source.keys) {
         if (!schema.containsKey(key)) {
@@ -165,14 +165,14 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
             isSecret: isSecret,
           );
 
-          // МГНОВЕННЫЙ ВЫХОД: Экономим ресурсы процессора, не идем дальше
+          // IMMEDIATE EXIT: Save CPU resources, do not continue
           if (effectiveAbortEarly) return FlodFailure([error]);
           errors.add(error);
         }
       }
     }
 
-    // 2. Основной цикл обхода полей схемы
+    // 2. Main schema field traversal loop
     // 12.2 — pre-resolve secret wrappers once per validation
     final parentSecret = isSecret;
     for (final entry in schema.entries) {
@@ -185,7 +185,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       if (source.containsKey(key)) {
         final fieldValue = source[key];
 
-        // Рекурсивно прокидываем effectiveAbortEarly вглубь дерева
+        // Recursively propagate effectiveAbortEarly down the tree
         final result = effectiveValidator.validate(
           fieldValue,
           path: path.append(key),
@@ -195,14 +195,14 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
         if (result is FlodSuccess) {
           outputResult[key] = result.data;
         } else if (result is FlodFailure) {
-          // МГНОВЕННЫЙ ВЫХОД: Если дочерний элемент упал, прерываем цикл схемы объекта!
+          // IMMEDIATE EXIT: If child failed, break the object schema loop!
           if (effectiveAbortEarly) {
             return FlodFailure([result.errors.first]);
           }
           errors.addAll(result.errors);
         }
       } else {
-        // Опрашиваем отсутствующее поле через концепцию "черного ящика"
+        // Validate missing field via "black box" concept
         final result = effectiveValidator.validate(
           null,
           path: path.append(key),
@@ -211,7 +211,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
 
         if (result is FlodSuccess) {
           outputResult[key] =
-              result.data; // Заполнение .default() или пропуск .optional()
+              result.data; // .default() fill or .optional() skip
         } else if (result is FlodFailure) {
           final error = FlodError(
             path: path.append(key),
@@ -221,7 +221,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
             isSecret: isSecret,
           );
 
-          // МГНОВЕННЫЙ ВЫХОД: Экономим такты ЦП при отсутствии обязательного поля
+          // IMMEDIATE EXIT: Save CPU cycles when required field is missing
           if (effectiveAbortEarly) return FlodFailure([error]);
           errors.add(error);
         }
@@ -239,7 +239,7 @@ class ObjectValidator extends Validator<Map<String, dynamic>>
       return FlodFailure(errors);
     }
 
-    // Если всё прошло успешно, подмешиваем невалидируемые ключи в passthrough режиме
+    // On success, merge non-validated keys in passthrough mode
     if (mode == ObjectMode.passthrough) {
       for (final key in source.keys) {
         if (!schema.containsKey(key)) {

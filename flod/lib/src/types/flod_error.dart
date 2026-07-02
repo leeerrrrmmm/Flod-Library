@@ -1,19 +1,19 @@
 import 'package:flod/flod.dart';
 
 class FlodError {
-  /// Путь к полю, где произошла ошибка
+  /// Path to the field where the error occurred
   final FlodPath path;
 
-  /// Строковый i18n-код ошибки (например, 'string.min')
+  /// String i18n error code (e.g. 'string.min')
   final String code;
 
-  /// Динамические параметры правила (например, {'limit': 5})
+  /// Dynamic rule parameters (e.g. {'limit': 5})
   final Map<String, dynamic> params;
 
-  /// Сырое значение, которое не прошло валидацию (внутреннее поле)
+  /// Raw value that failed validation (internal field)
   final dynamic _rawValue;
 
-  /// Флаг конфиденциальности данных
+  /// Data confidentiality flag
   final bool isSecret;
 
   const FlodError({
@@ -24,29 +24,29 @@ class FlodError {
     this.isSecret = false,
   }) : _rawValue = value;
 
-  /// Безопасный геттер для значения.
-  /// Если поле помечено как секретное, оно жестко маскируется для внешнего мира.
+  /// Safe getter for the value.
+  /// If the field is marked secret, it is strictly masked for external consumers.
   dynamic get value => isSecret ? '[HIDDEN]' : _rawValue;
 
-  /// Хелпер для получения реального значения внутри библиотеки
-  /// (если оно вдруг понадобится для внутренних не-лог вычислений)
+  /// Helper to access the real value inside the library
+  /// (if needed for internal non-log computations)
   dynamic get rawValue => _rawValue;
 
-  /// Сериализация в Map с автоматическим сокрытием приватных данных
+  /// Serializes to Map with automatic masking of private data
   Map<String, dynamic> toMap() {
     return {
       'path': path
-          .toString(), // Или path.segments, смотря как устроен твой FlodPath
+          .toString(), // Or path.segments, depending on FlodPath implementation
       'code': code,
       'params': params,
-      'value': value, // Использует безопасный геттер с маскированием!
+      'value': value, // Uses the safe getter with masking!
     };
   }
 
   @override
   String toString() {
     final pathStr = path.toString().isEmpty ? '_root_' : path.toString();
-    // Полностью исключаем утечку сырого значения, если isSecret = true
+    // Fully prevent raw value leakage when isSecret = true
     final displayValue = value;
     return "FlodError(path: '$pathStr', code: '$code', params: $params, value: $displayValue)";
   }

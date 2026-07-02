@@ -2,8 +2,8 @@ import 'package:flod/flod.dart';
 import 'package:flod/src/core/performance/chain_utils.dart';
 import 'package:flod/src/core/transformer/transformer.dart';
 
-/// Строго типизированный валидатор списков/коллекций.
-/// [T] обозначает тип элементов, находящихся внутри списка.
+/// Strictly typed list/collection validator.
+/// [T] denotes the type of elements inside the list.
 class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
   final Validator<T>? schema;
   final int? minItemsLength;
@@ -87,7 +87,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     FlodPath path = const FlodPath.empty(),
     bool? abortEarly,
   }) {
-    // 1. Проверяем базовый тип данных
+    // 1. Check base data type
     if (input == null) {
       return FlodFailure([
         FlodError(
@@ -131,11 +131,11 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
       }
     }
 
-    // Безопасное приведение к Iterable для выполнения трансформаций
+    // Safe cast to Iterable for running transforms
 
-    // 2. Применяем пайплайн трансформаций (работаем с типизированным списком)
-    // Преобразуем исходный список к List<T> перед применением трансформеров,
-    // либо маппим элементы, если это необходимо.
+    // 2. Apply transform pipeline (work with typed list)
+    // Convert source list to List<T> before transformers,
+    // or map elements if needed.
     List<T> baseList;
     try {
       baseList = List<T>.from(rawList);
@@ -151,12 +151,12 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
       ]);
     }
 
-    // Применяем зарегистрированные трансформаторы уровня списка
+    // Apply registered list-level transformers
     baseList = applyTransforms(baseList, path);
 
     final errors = <FlodError>[];
 
-    // 3. Проверка ограничений на длину списка
+    // 3. Check list length constraints
     if (minItemsLength != null && baseList.length < minItemsLength!) {
       errors.add(
         FlodError(
@@ -184,7 +184,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     final len = baseList.length;
     final List<T?> outputList = List<T?>.filled(len, null);
 
-    // 4. Поэлементная валидация по вложенной схеме (schema)
+    // 4. Per-element validation via nested schema
     // 12.2 — hoist secret schema once per validation
     final effectiveSchema = isSecret && schema != null ? schema!.secret() : schema;
 
@@ -212,7 +212,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
 
     final validatedList = List<T>.from(outputList);
 
-    // 5. Проверяем уникальность ТОЛЬКО если дочерние элементы успешно свалидировались.
+    // 5. Check uniqueness ONLY if child elements validated successfully.
     if (isUnique && errors.isEmpty) {
       final seen = <T>{};
       for (int i = 0; i < validatedList.length; i++) {

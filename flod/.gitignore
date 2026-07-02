@@ -15,7 +15,7 @@ build/
 bin/
 gen/
 
-# Generated files (если используете build_runner)
+# Generated files (if using build_runner)
 *.g.dart
 *.freezed.dart
 *.injectable.dart

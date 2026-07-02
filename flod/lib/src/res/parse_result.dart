@@ -14,27 +14,27 @@ class FlodFailure<Out> extends ParseResult<Out> {
   final List<FlodError> errors;
   const FlodFailure(this.errors);
 
-  /// Возвращает список человекочитаемых сообщений с применением резолвера.
-  /// Можно передать локальный резолвер, иначе возьмется глобальный.
+  /// Returns human-readable messages using the resolver.
+  /// Pass a local resolver, otherwise the global one is used.
   List<String> getMessages({FlodI18nResolver? customResolver}) {
     final resolver = customResolver ?? FlodConfig.errorResolver;
     return errors.map((err) => resolver.translate(err)).toList();
   }
 
-  /// Карта ошибок вида {"user.age": "Value must be greater than or equal to 18"}
-  /// Идеально для Flutter Form / Form Validation Map.
+  /// Error map like {"user.age": "Value must be greater than or equal to 18"}
+  /// Ideal for Flutter Form / Form Validation Map.
   Map<String, String> getFieldsMap({FlodI18nResolver? customResolver}) {
     final resolver = customResolver ?? FlodConfig.errorResolver;
     final Map<String, String> map = {};
     for (final error in errors) {
-      // Ипользуем уже реализованный error.pathContext или кэшированный путь
+      // Use existing error.pathContext or cached path
       map[error.path.toReadable()] = resolver.translate(error);
     }
     return map;
   }
 
-  /// Возвращает карту, группирующую ВСЕ локализованные ошибки для каждого поля.
-  /// Идеально для продвинутых UI-компонентов с поддержкой Multi-Error
+  /// Returns a map grouping ALL localized errors per field.
+  /// Ideal for advanced UI components with Multi-Error support
   Map<String, List<String>> getGroupedFieldsMap({
     FlodI18nResolver? customResolver,
   }) {

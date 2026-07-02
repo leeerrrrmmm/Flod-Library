@@ -10,7 +10,7 @@ export 'src/core/performance/compiled_validators.dart';
 export 'src/core/performance/schema_pool.dart';
 export 'src/core/performance/validator_compiler.dart';
 export 'src/core/validator.dart';
-// Самое важное: Экспорт всех расширений (.nullable(), .optional() и т.д.)
+// Most important: export all extensions (.nullable(), .optional(), etc.)
 export 'src/extensions/all_extensions.dart';
 export 'src/i18n/errors/errors_codes.dart';
 export 'src/i18n/resolver.dart';
@@ -34,31 +34,31 @@ export 'src/validators/refine_validator/super_refine_validator.dart';
 export 'src/validators/string_validator/string_validator.dart';
 export 'src/validators/union_validator/union_validator.dart';
 
-/// Главная точка входа в библиотеку Flod.
-/// Предоставляет удобный и лаконичный API для декларативного создания схем.
+/// Main entry point for the Flod library.
+/// Provides a concise API for declarative schema creation.
 abstract final class Flod {
-  /// Валидатор строковых данных (12.1 — shared base instance)
+  /// String data validator (12.1 — shared base instance)
   static StringValidator string() => SchemaPool.string;
 
-  /// Валидатор целочисленных значений (int) (12.1 — shared base instance)
+  /// Integer (int) validator (12.1 — shared base instance)
   static IntValidator int() => SchemaPool.int;
 
-  /// Валидатор чисел с плавающей точкой (double) (12.1 — shared base instance)
+  /// Floating-point (double) validator (12.1 — shared base instance)
   static DoubleValidator double() => SchemaPool.double;
 
-  /// Валидатор логических значений (bool) (12.1 — shared base instance)
+  /// Boolean validator (12.1 — shared base instance)
   /// Zod-compatible: `z.boolean()` → `Flod.boolean()`.
   static BoolValidator boolean() => SchemaPool.boolean;
 
-  /// Валидатор списков/коллекций с поддержкой внутренней схемы элементов
+  /// List/collection validator with inner element schema support
   static ListValidator<T> list<T>({Validator<T>? schema}) =>
       ListValidator<T>(schema: schema);
 
-  /// Валидатор объектов (Map< String, dynamic >) со строгой структурой ключей
+  /// Object validator (Map<String, dynamic>) with strict key structure
   static ObjectValidator object(Map<String, Validator> schema) =>
       ObjectValidator(schema);
 
-  /// Валидатор объектов (Map< String, dynamic >) со строгой структурой ключей и условными валидациями
+  /// Object validator with strict key structure and conditional validations
   static Validator<Map<String, dynamic>> refineObject(
     Map<String, Validator> schema,
     bool Function(Map<String, dynamic> value) predicate, {
@@ -69,16 +69,16 @@ abstract final class Flod {
     schema,
   ).refine(predicate, path: path, code: code, params: params);
 
-  /// Валидатор Union-типов (объединений) для полиморфных структур
+  /// Union-type validator for polymorphic structures
   static UnionValidator union(List<Validator> schemas) =>
       UnionValidator(schemas);
 
-  /// Валидатор строго фиксированных литеральных значений (enum-like или константы)
+  /// Strict literal value validator (enum-like or constants)
   static LiteralValidator<T> literal<T>(T expectedValue, {String? code}) {
     return LiteralValidator<T>(expectedValue, customCode: code);
   }
 
-  /// Фабрика для сборки кастомных локализаторов (например, украинского ukrainianResolver)
+  /// Factory for building custom locale resolvers (e.g. ukrainianResolver)
   static FlodI18nResolver i18n(FlodLocaleCompiler compiler) =>
       FlodI18nResolver(compiler);
 }

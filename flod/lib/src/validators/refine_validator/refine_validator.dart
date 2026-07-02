@@ -49,7 +49,7 @@ class RefineValidator<T> extends Validator<T> {
     );
   }
 
-  // Прокидываем управляющие методы вглубь матрешки
+  // Propagate control methods into nested wrappers
   @override
   Validator<T> strict() => RefineValidator<T>(
     _inner.strict(),
@@ -84,10 +84,10 @@ class RefineValidator<T> extends Validator<T> {
       isSecret: isSecret,
     );
 
-    //Сначала проверяем внутренний валидатор
+    // First validate the inner validator
     final result = _inner.validate(value, path: path, abortEarly: abortEarly);
 
-    //Сразу проверяем на ошибки
+    // Immediately check for errors
     if (result is FlodFailure) {
       FlodDebug.trace(
         'fail',
@@ -105,8 +105,8 @@ class RefineValidator<T> extends Validator<T> {
       final isValid = _predicate(data);
 
       if (!isValid) {
-        // Формируем целевой путь. Если передан локальный path: ['confirmPassword'],
-        // склеиваем его с текущим родительским контекстом.
+        // Build target path. If local path: ['confirmPassword'] is passed,
+        // merge it with the current parent context.
         final targetPath = _customPath != null
             ? FlodPath([...path.segments, ..._customPath])
             : path;

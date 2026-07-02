@@ -1,8 +1,13 @@
-# Flod — Zod-like schema validation for Dart & Flutter
+# Flod — schema validation for Dart & Flutter
 
-**Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.  
-If you know **[Zod](https://zod.dev)** (TypeScript) or **Zod-inspired** APIs, Flod will feel familiar — with extras that matter in production: **PII-safe errors**, **JSON hardening**, **Dio middleware**, and a **compiled performance layer**.
+**Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.
+If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod will feel immediately familiar — with the extras that matter in production: **PII-safe errors**, **JSON hardening**, **Dio middleware**, **Flutter form bridging**, and a **compiled performance layer**.
 
+[![pub package](https://img.shields.io/badge/pub-v1.0.0-blue)](https://pub.dev)
+[![tests](https://img.shields.io/badge/tests-78%2B%20passing-brightgreen)]()
+[![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
+
+![Logo](assets/logo.png)
 
 
 ---
@@ -25,30 +30,32 @@ If you know **[Zod](https://zod.dev)** (TypeScript) or **Zod-inspired** APIs, Fl
 - [Performance & benchmarks](#performance--benchmarks)
 - [Internationalization (i18n)](#internationalization-i18n)
 - [Debug mode](#debug-mode)
+- [Project status](#project-status)
 - [What's coming](#whats-coming)
 - [Running examples & tests](#running-examples--tests)
+- [License](#license)
 
 ---
 
 ## Why Flod?
 
-Most Dart projects still validate API payloads with **manual casts**, scattered `if` checks, or code-gen models that assume data is already correct. That works until it doesn't — and when it breaks, you get `type 'String' is not a subtype of type 'int'` in production with **no field path**, **no i18n hook**, and sometimes **leaked passwords in logs**.
+Most Dart projects still validate API payloads with **manual casts**, scattered `if` checks, or code-gen models that assume the data is already correct. That works until it doesn't — and when it breaks, you get `type 'String' is not a subtype of type 'int'` in production, with **no field path**, **no i18n hook**, and sometimes **leaked passwords in logs**.
 
-Flod fills the gap that **Zod** solved on the frontend — but natively for Dart/Flutter backends and clients.
+Flod fills the gap that **Zod** solved on the frontend — but natively for Dart/Flutter backends and clients, and with an integration layer built for real production concerns: network boundaries, forms, and secrets.
 
 | Capability | Manual `as` / `Map` checks | Code-gen only (JSON → class) | **Flod** |
 |---|---|---|---|
 | Zod-like chained API | ❌ | ❌ | ✅ |
-| `safeParse()` / `parse()` dual API | ❌ | ❌ | ✅ |
+| `safeParse()` / `parse()` dual API (sync + async) | ❌ | ❌ | ✅ |
 | Deep path errors (`user.profile.age`) | ❌ | partial | ✅ |
 | Transforms before validation (trim, lowerCase) | manual | ❌ | ✅ |
 | Cross-field rules (password confirm) | manual | ❌ | ✅ |
 | `.secret()` — mask PII in errors & traces | ❌ | ❌ | ✅ |
-| JSON attack surface guard (depth, `__proto__`) | ❌ | ❌ | ✅ |
-| Dio response validation middleware | ❌ | ❌ | ✅ |
-| Form field error maps for Flutter | ❌ | ❌ | ✅ |
+| JSON attack-surface guard (depth, `__proto__`) | ❌ | ❌ | ✅ |
+| Dio response-validation middleware | ❌ | ❌ | ✅ |
+| Flutter form field error maps | ❌ | ❌ | ✅ |
 | Compiled hot path (`schema.compile()`) | ❌ | ❌ | ✅ |
-| Planned: `build_runner` typed codegen | — | ✅ | 🔜 [see below](#whats-coming) |
+| `build_runner` typed codegen | — | ✅ | 🔜 [see roadmap](#whats-coming) |
 
 **When Flod shines**
 
@@ -73,9 +80,9 @@ dependencies:
 | Import | Purpose |
 |---|---|
 | `package:flod/flod.dart` | Core validators, `Flod.*` factories, `safeParse`, i18n |
-| `package:flod/dio.dart` | `FlodValidateInterceptor` |
-| `package:flod/guard.dart` | `JsonGuard` security layer |
-| `package:flod/form.dart` | `FlodFormAdapter` (pure Dart, Flutter-ready) |
+| `package:flod/dio.dart` | `FlodValidateInterceptor` — Dio middleware |
+| `package:flod/guard.dart` | `JsonGuard` — JSON security layer |
+| `package:flod/form.dart` | `FlodFormAdapter` — pure Dart, Flutter-ready |
 
 ---
 
@@ -108,12 +115,12 @@ final result = checkoutSchema.safeParse(jsonMap);
 if (result is FlodSuccess<Map<String, dynamic>>) {
   final data = result.data; // validated + transformed
 } else if (result is FlodFailure<Map<String, dynamic>>) {
-  print(result.toReadable());           // human-readable lines
-  print(result.getFieldsMap());         // {"profile.age": "..."}
+  print(result.toReadable());   // human-readable lines
+  print(result.getFieldsMap()); // {"profile.age": "..."}
 }
 ```
 
-**Compile for production hot paths** (recommended after schema is stable):
+**Compile for production hot paths** (recommended once a schema is stable):
 
 ```dart
 final compiled = checkoutSchema.compile(); // ValidatorCompiler + CompiledObjectValidator
@@ -154,11 +161,11 @@ schema.safeParse(data, abortEarly: true);
 ### Primitives
 
 ```dart
-Flod.string()    // trim, email, url, uuid, regex, creditCard (Luhn), cvv, …
-Flod.int()       // min, max, positive, negative, multipleOf, …
-Flod.double()    // same numeric constraints
-Flod.boolean()   // Zod-compatible: z.boolean() → Flod.boolean()
-Flod.literal('admin')  // enum-like fixed values
+Flod.string()          // trim, email, url, uuid, regex, creditCard (Luhn), cvv, phoneNumber, …
+Flod.int()              // min, max, positive, negative, multipleOf, …
+Flod.double()           // same numeric constraints
+Flod.boolean()          // Zod-compatible: z.boolean() → Flod.boolean()
+Flod.literal('admin')   // enum-like fixed values
 ```
 
 ### String formats (domain rules)
@@ -234,7 +241,7 @@ final eventSchema = Flod.union([
 |---|---|
 | `.nullable()` | Key present, value may be `null` |
 | `.optional()` | Key may be absent from the object |
-| `.withDefault(value)` | Zod `.default()` — Dart keyword safe name |
+| `.withDefault(value)` | Zod `.default()` — Dart keyword-safe name |
 
 ```dart
 Flod.int().nonNegative().withDefault(0)  // missing key → 0
@@ -283,15 +290,15 @@ base.pick(['id', 'email']);             // keep subset
 base.omit(['internalDebug']);           // remove keys
 ```
 
-Reuse primitives via **SchemaPool** — `Flod.string()` returns shared singleton instances (§12.1).
+Reuse primitives via **SchemaPool** — `Flod.string()` returns shared singleton instances (see [Performance & benchmarks](#performance--benchmarks)).
 
 ---
 
 ## Security & privacy — `.secret()`
 
-This is one of Flod's strongest differentiators vs other Dart validators and vs naive Zod usage in logging pipelines.
+One of Flod's strongest differentiators vs other Dart validators and vs naive Zod usage in logging pipelines.
 
-Mark any validator (or whole object) as **secret** — failed values and debug traces show `[HIDDEN]` instead of raw PII:
+Mark any validator (or a whole object) as **secret** — failed values and debug traces show `[HIDDEN]` instead of raw PII:
 
 ```dart
 final loginSchema = Flod.object({
@@ -396,7 +403,7 @@ TextFormField(
 
 ## Integrations — Dio, forms & JsonGuard
 
-### JsonGuard — secure JSON ingestion (§16.3)
+### JsonGuard — secure JSON ingestion
 
 Structural security **before** schema validation:
 
@@ -419,7 +426,7 @@ final result = guard.parseJson(rawHttpBody, userSchema);
 
 Blocks: prototype pollution keys, excessive depth/key budget, oversized strings/arrays, invalid JSON.
 
-### FlodValidateInterceptor — Dio middleware (§16.2)
+### FlodValidateInterceptor — Dio middleware
 
 ```dart
 import 'package:flod/dio.dart';
@@ -431,7 +438,7 @@ dio.interceptors.add(FlodValidateInterceptor(
 ));
 ```
 
-On success: replaces `response.data` with validated, typed output.  
+On success: replaces `response.data` with validated, typed output.
 On failure: `DioException` with `ValidationException` inside.
 
 Standalone helper (no Dio instance needed):
@@ -444,9 +451,9 @@ FlodValidateInterceptor.validatePayload(
 );
 ```
 
-### FlodFormAdapter — form bridge (§16.1)
+### FlodFormAdapter — form bridge
 
-Pure Dart — no Flutter dependency. See [Developer experience](#developer-experience--readable-errors).
+Pure Dart — no Flutter dependency required at the adapter level. See [Developer experience](#developer-experience--readable-errors) for a usage example. Built directly on top of `getFieldsMap()`, so form errors and API errors always stay in sync with the same schema.
 
 ---
 
@@ -456,9 +463,9 @@ Flod v1.0 ships a **performance layer** designed for hot paths:
 
 | Layer | What it does |
 |---|---|
-| **SchemaPool** (§12.1) | Shared singleton validators for `string`, `int`, `double`, `bool` |
-| **Chain optimization** (§12.2) | Identity-aware `copyWith`, `isPure` fast path, secret hoisting |
-| **ValidatorCompiler** (§12.3) | `schema.compile()` → `CompiledObjectValidator`, identity cache |
+| **SchemaPool** | Shared singleton validators for `string`, `int`, `double`, `bool` |
+| **Chain optimization** | Identity-aware `copyWith`, `isPure` fast path, secret hoisting |
+| **ValidatorCompiler** | `schema.compile()` → `CompiledObjectValidator` / `CompiledListValidator`, identity cache |
 
 ### Methodology (internal QA, July 2026)
 
@@ -506,7 +513,7 @@ Errors are **code + params** — text lives in a resolver, not hard-coded in val
 ```dart
 FlodConfig.setup(
   localeCompiler: (code, params) {
-    if (code == FlodErrorCodes.stringEmail) return 'Невірний email';
+    if (code == FlodErrorCodes.stringEmail) return 'Invalid email';
     return FlodDefaultLocale.compile(code, params);
   },
 );
@@ -534,19 +541,46 @@ Trace format:
 
 ---
 
+## Project status
+
+Flod v1.0 is feature-complete against its original design goals. All core engine, DX, security, performance, and integration layers described in this document are implemented and covered by the test suite:
+
+- ✅ Core parsing (`safeParse` / `parse`, sync & async)
+- ✅ Full primitive + string-format validator suite (`email`, `url`, `uuid`, `phone`, `credit card/Luhn`, `CVV`, `regex`)
+- ✅ Transform pipeline, `nullable`/`optional`/`default handling`
+- ✅ Objects (`strict`/`passthrough`), nested paths, lists, unions & discriminated unions
+- ✅ Cross-field validation (`refine`, `superRefine`, `async variants`)
+- ✅ Schema composition (`extend`, `merge`, `partial`, `pick`, `omit`)
+- ✅ `.secret()` PII masking across errors and debug traces
+- ✅ `i18n resolver` + `debug tracing`
+- ✅ Performance layer — `SchemaPool`, `ChainOptimization`, `ValidatorCompiler`
+- ✅ Integrations — `JsonGuard`, `FlodValidateInterceptor` (Dio), `FlodFormAdapter`
+
+The only major item intentionally deferred is **typed static codegen** (`build_runner`) — see below.
+
+---
+
 ## What's coming
 
-Planned updates — same chain API as today (`Flod.string().isIp().secret()`), with i18n error codes and `compile()` support.
+The chain API stays exactly as it is today (`Flod.string().isIp().secret()`) — new capability is additive, with i18n codes and `compile()` support from day one.
 
-1. **Static codegen** — opt-in `build_runner` packages (`flod_generator`, `flod_build`): annotate a class with `@FlodSchema()`, get a typed `Validator<T>`, parse helpers, and refactor-safe field paths. Runtime-only Flod remains fully supported.
+### Confirmed roadmap
 
+1. **Static codegen** — opt-in `build_runner` packages (`flod_generator`, `flod_build`): annotate a class with `@FlodSchema()`, get a typed `Validator<T>`, parse helpers, and refactor-safe field paths. Runtime-only Flod remains fully supported and will not be deprecated.
 2. **Network** — `.isIp(version: IpVersion)` (IPv4 / IPv6), `.isHostname()` (RFC domain names), `.isPort()` (0–65535).
-
 3. **Media & encoding** — `.isBase64()` (optional strict padding), `.isMimeType()` (`type/subtype`, e.g. `application/json`).
-
-4. **Advanced formats** — `.isIso8601()` (date, time, duration), `.isJsonString()` (valid JSON object/array in a string), `.isHexColor()` (`#RRGGBB`, `#RRGGBBAA`).
-
+4. **Advanced formats** — `.isIso8601()` (date, time, duration), `.isJsonString()` (valid JSON object/array in a string), `.isHexColor()` (`#RRGGBB` / `#RRGGBBAA`).
 5. **Content & business rules** — `.isSlug()` (URL-safe slugs), `.isCurrencyCode()` (ISO 4217), `.isLanguageCode()` (ISO 639-1).
+
+### Proposed additions (under evaluation)
+
+These aren't committed yet, but each targets a gap that's specific to what makes Flod different from plain Zod-porting — the API/Dio/Flutter surface — rather than duplicating format validators already on the confirmed list.
+
+- **`.toJsonSchema()` / `.toOpenApiSchema()`** — export any Flod schema as JSON Schema / OpenAPI. Since Flod already sits at the Dio boundary, this closes the loop: the same schema that validates a response can generate the API contract documentation, instead of maintaining both by hand.
+- **`.lazy(() => schema)`** — deferred schema resolution for recursive structures (comment trees, nested category trees, org charts). This is a known Zod pattern that has no equivalent yet in Flod's object/union model.
+- **`schema.generateSample()`** — produce realistic fixture/mock data straight from a schema (respecting `min`/`max`/`email`/`uuid`/etc.), for unit tests and Flutter widget previews without hand-writing fixtures that drift from the real schema.
+- **Isolate-aware `compile(parallel: true)`** — for the 1 MB+ payload case already covered in the benchmarks, offload compiled list validation to a Dart isolate so large API responses don't block the UI thread in Flutter.
+- **`CompiledListValidator` completion** — the compiler currently returns an optimized `ListValidator` rather than a dedicated `CompiledListValidator`; closing this gap would make the compiled path fully consistent between objects and lists.
 
 Track progress in [CHANGELOG](CHANGELOG.md).
 
@@ -557,7 +591,7 @@ Track progress in [CHANGELOG](CHANGELOG.md).
 ```bash
 cd flod
 dart pub get
-dart test                    # 78+ tests — core, integrations, performance layer
+dart test                            # 78+ tests — core, integrations, performance layer
 dart run example/flod_example.dart   # full stress & privacy matrix
 ```
 
@@ -566,5 +600,3 @@ dart run example/flod_example.dart   # full stress & privacy matrix
 ## License
 
 See [LICENSE](LICENSE).
-
----

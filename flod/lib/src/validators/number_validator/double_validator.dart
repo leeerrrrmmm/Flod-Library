@@ -8,7 +8,7 @@ class DoubleValidator extends BaseNumberValidator<double>
   @override
   final List<Transformer<double>> transformers;
 
-  // Константный конструктор с правильным пробросом super-параметров
+  // Const constructor with correct super-parameter forwarding
   const DoubleValidator([
     super.rules = const [],
     this.transformers = const [],
@@ -26,14 +26,14 @@ class DoubleValidator extends BaseNumberValidator<double>
   }
 
   // =========================================================================
-  // ВСТРОЕННЫЕ ЧИСЛОВЫЕ ТРАНСФОРМЕРЫ
+  // BUILT-IN NUMERIC TRANSFORMERS
   // =========================================================================
 
-  /// Автоматически берет модуль числа перед валидацией
+  /// Automatically takes absolute value before validation
   DoubleValidator abs() => _copyWithTransform((v) => (v as double).abs());
 
   // =========================================================================
-  // МЕНЕДЖМЕНТ СОСТОЯНИЯ СХЕМЫ (Валидный override сигнатуры)
+  // SCHEMA STATE MANAGEMENT (Valid override signature)
   // =========================================================================
 
   @override
@@ -70,7 +70,7 @@ class DoubleValidator extends BaseNumberValidator<double>
       super.nonNegative(code: code) as DoubleValidator;
 
   // =========================================================================
-  // ЯДРО ВАЛИДАЦИИ
+  // VALIDATION CORE
   // =========================================================================
 
   @override
@@ -79,7 +79,7 @@ class DoubleValidator extends BaseNumberValidator<double>
     FlodPath path = const FlodPath([]),
     bool? abortEarly = false,
   }) {
-    // ЗАЩИТА 1: Сначала проверяем тип, оберегая конвейер трансформаций от падений
+    // GUARD 1: Check type first, protecting transform pipeline from crashes
     if (value is! double) {
       return FlodFailure([
         FlodError(
@@ -115,7 +115,7 @@ class DoubleValidator extends BaseNumberValidator<double>
         : applyTransforms(value, path);
     final double transformed = rawTransformed as double;
 
-    // ЗАЩИТА 2: Проверяем на Finite / NaN уже трансформированное число
+    // GUARD 2: Check Finite / NaN on already transformed number
     if (!transformed.isFinite) {
       return FlodFailure([
         FlodError(
@@ -124,7 +124,7 @@ class DoubleValidator extends BaseNumberValidator<double>
           params: {'value': transformed},
           value: isSecret
               ? null
-              : transformed, // В лог уходит актуальное состояние
+              : transformed, // Current state goes to the log
           isSecret: isSecret,
         ),
       ]);
@@ -132,7 +132,7 @@ class DoubleValidator extends BaseNumberValidator<double>
 
     final errors = <FlodError>[];
 
-    // Валидация по цепочке доменных правил
+    // Validate against domain rule chain
     for (final rule in rules) {
       if (!rule.check(transformed)) {
         errors.add(

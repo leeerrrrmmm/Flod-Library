@@ -7,7 +7,7 @@ class FlodPath {
   const FlodPath(this.segments);
   const FlodPath.empty() : segments = const [];
 
-  /// Быстрое и безопасное создание дочернего пути (для O(1) переходов по дереву)
+  /// Fast, safe child path creation (for O(1) tree traversal)
   FlodPath append(Object segment) {
     assert(
       segment is String || segment is int,
@@ -16,7 +16,7 @@ class FlodPath {
     return FlodPath([...segments, segment]);
   }
 
-  /// Метод .toReadable() полностью совместимый со стресс-тестом и JSON-нотацией
+  /// .toReadable() compatible with stress tests and JSON notation
   String toReadable() {
     if (segments.isEmpty) return '_root_';
     final buffer = StringBuffer();
@@ -26,8 +26,8 @@ class FlodPath {
       if (seg is int) {
         buffer.write('[$seg]');
       } else {
-        // Ставим точку, если это не первый элемент и перед ним не было корня,
-        // либо если перед строковым ключом шел индекс массива: users[0].name
+        // Add a dot if this is not the first segment and there was no root before,
+        // or if a string key follows an array index: users[0].name
         if (i > 0) {
           buffer.write('.');
         }
@@ -37,7 +37,7 @@ class FlodPath {
     return buffer.toString();
   }
 
-  // Быстрое покомпонентное сравнение без внешних зависимостей
+  // Fast component-wise comparison without external dependencies
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -51,7 +51,7 @@ class FlodPath {
     return true;
   }
 
-  // Быстрый и надежный расчет хэш-кода (алгоритм Джона Блоха)
+  // Fast, reliable hash code (John Bloch's algorithm)
   @override
   int get hashCode {
     var hash = 17;

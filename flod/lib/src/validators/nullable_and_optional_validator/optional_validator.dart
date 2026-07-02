@@ -37,15 +37,15 @@ class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
     FlodPath path = const FlodPath([]),
     bool? abortEarly,
   }) {
-    // 1. EXECUTION ORDER: Применяем трансформации уровня Optional
+    // 1. EXECUTION ORDER: Apply Optional-level transforms
     final dynamic transformed = applyTransforms(value, path);
 
-    // 2. Если значение null — успешный выход
+    // 2. If value is null — successful exit
     if (transformed == null) {
       return FlodSuccess<T?>(null);
     }
 
-    // 3. Делегируем глубокую валидацию и внутренние трансформации дочернему валидатору
+    // 3. Delegate deep validation and inner transforms to child validator
     final result = _inner.validate(
       transformed,
       path: path,
@@ -71,7 +71,7 @@ class OptionalValidator<T> extends Validator<T?> with Transformable<T?> {
       return FlodFailure<T?>((result as FlodFailure<T?>).errors);
     }
 
-    // Безопасно вытаскиваем данные из FlodSuccess
+    // Safely extract data from FlodSuccess
     return FlodSuccess<T?>((result as FlodSuccess<T?>).data);
   }
 }
