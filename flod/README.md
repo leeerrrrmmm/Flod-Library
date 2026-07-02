@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/leeerrrrmmm/Flod-Library/main/flod/assets/flod_final_logo.png" width="300" alt="Flod Logo">
+  <img src="https://raw.githubusercontent.com/leeerrrrmmm/Flod-Library/main/flod/assets/flod_final_logo.webp" width="900" alt="Flod Logo">
 </p>
 
 # Flod — schema validation for Dart & Flutter
