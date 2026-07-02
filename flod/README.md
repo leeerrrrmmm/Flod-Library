@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/leeerrrrmmm/Flod-Library/main/flod/assets/logo.png" width="300" alt="Flod Logo">
+</p>
+
 # Flod — schema validation for Dart & Flutter
 
 **Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.
@@ -6,9 +10,6 @@ If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod w
 [![pub package](https://img.shields.io/badge/pub-v1.0.0-blue)](https://pub.dev)
 [![tests](https://img.shields.io/badge/tests-78%2B%20passing-brightgreen)]()
 [![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
-
-![Logo](assets/logo.png)
-
 
 ---
 
