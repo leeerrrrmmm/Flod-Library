@@ -1,6 +1,6 @@
 name: flod
 description: Strict, fast, type-safe data validation and transformation for Dart and Flutter.
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/leeerrrrmmm/Flod-Library/tree/main/flod
 
 environment:

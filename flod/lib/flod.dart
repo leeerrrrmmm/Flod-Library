@@ -54,7 +54,7 @@ abstract final class Flod {
   static ListValidator<T> list<T>({Validator<T>? schema}) =>
       ListValidator<T>(schema: schema);
 
-  /// Object validator (Map<String, dynamic>) with strict key structure
+  /// Object validator (`Map<String, dynamic>`) with strict key structure
   static ObjectValidator object(Map<String, Validator> schema) =>
       ObjectValidator(schema);
 
