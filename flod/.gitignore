@@ -27,4 +27,3 @@ Thumbs.db
 # Project local configuration
 pubspec.lock
 .env
-high_ex.dart
