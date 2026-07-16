@@ -8,7 +8,6 @@
 //
 import 'package:flod/flod.dart';
 import 'package:flod/guard.dart';
-import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 void main() {
   print('=== Flod quick start ===\n');

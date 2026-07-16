@@ -1,5 +1,4 @@
 import 'package:flod/flod.dart';
-import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 import 'package:test/test.dart';
 
 /// Shared mega-schema builder used by omnibus stress assertions.
@@ -249,6 +248,17 @@ void main() {
       }).stopOnFirstError();
 
       final result = schema.safeParse({'a': 'bad', 'b': -1});
+      expect(result, isA<FlodFailure>());
+      expect((result as FlodFailure).errors.length, 1);
+    });
+
+    test('safeParse abortEarly stops at first error', () {
+      final schema = Flod.object({
+        'a': Flod.string().email(),
+        'b': Flod.int().positive(),
+      });
+
+      final result = schema.safeParse({'a': 'bad', 'b': -1}, abortEarly: true);
       expect(result, isA<FlodFailure>());
       expect((result as FlodFailure).errors.length, 1);
     });

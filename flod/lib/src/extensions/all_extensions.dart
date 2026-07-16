@@ -1,6 +1,5 @@
 import 'package:flod/flod.dart';
 import 'package:flod/src/core/decorator/default_decorator.dart';
-import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 extension DefaultExtension<T> on Validator<T> {
   /// Zod-compatible default value (Dart keyword prevents `.default()`).
@@ -12,16 +11,23 @@ extension DefaultExtension<T> on Validator<T> {
 }
 
 extension ValidatorExtensions<T> on Validator<T> {
-  ParseResult<T> safeParse(dynamic value) {
-    final result = validate(value);
+  /// Validates [value] without throwing.
+  ///
+  /// When [abortEarly] is `true`, stops after the first error (faster invalid
+  /// paths). Prefer [Validator.stopOnFirstError] to bake this into the schema.
+  ParseResult<T> safeParse(dynamic value, {bool? abortEarly}) {
+    final result = validate(value, abortEarly: abortEarly);
     if (result is FlodFailure<T>) {
       return FlodFailure<T>(result.errors);
     }
     return FlodSuccess<T>((result as FlodSuccess<T>).data);
   }
 
-  T parse(dynamic value) {
-    final result = validate(value);
+  /// Validates [value] and returns data, or throws [ValidationException].
+  ///
+  /// See [safeParse] for [abortEarly] semantics.
+  T parse(dynamic value, {bool? abortEarly}) {
+    final result = validate(value, abortEarly: abortEarly);
     if (result is FlodFailure<T>) {
       throw ValidationException(result.errors);
     }
@@ -29,15 +35,21 @@ extension ValidatorExtensions<T> on Validator<T> {
   }
 
   /// Async parse — required for schemas with [refineAsync] / [superRefineAsync].
-  Future<ParseResult<T>> safeParseAsync(dynamic value) async {
+  Future<ParseResult<T>> safeParseAsync(
+    dynamic value, {
+    bool? abortEarly,
+  }) async {
     if (this is AsyncValidator<T>) {
-      return (this as AsyncValidator<T>).validateAsync(value);
+      return (this as AsyncValidator<T>).validateAsync(
+        value,
+        abortEarly: abortEarly,
+      );
     }
-    return safeParse(value);
+    return safeParse(value, abortEarly: abortEarly);
   }
 
-  Future<T> parseAsync(dynamic value) async {
-    final result = await safeParseAsync(value);
+  Future<T> parseAsync(dynamic value, {bool? abortEarly}) async {
+    final result = await safeParseAsync(value, abortEarly: abortEarly);
     if (result is FlodFailure<T>) {
       throw ValidationException(result.errors);
     }
