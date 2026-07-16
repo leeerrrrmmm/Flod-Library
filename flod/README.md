@@ -7,8 +7,8 @@
 **Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.
 If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod will feel immediately familiar — with the extras that matter in production: **PII-safe errors**, **JSON hardening**, **Dio middleware**, **Flutter form bridging**, and a **compiled performance layer**.
 
-[![pub package](https://img.shields.io/badge/pub-v1.0.0-blue)](https://pub.dev)
-[![tests](https://img.shields.io/badge/tests-78%2B%20passing-brightgreen)]()
+[![pub package](https://img.shields.io/badge/pub-v1.0.3-blue)](https://pub.dev)
+[![tests](https://img.shields.io/badge/tests-79%2B%20passing-brightgreen)]()
 [![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
 
 ---
@@ -73,18 +73,19 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flod: ^1.0.2
+  flod: ^1.0.3
 ```
 
 **Entry points**
 
 | Import | Purpose |
 |---|---|
-| `package:flod/flod.dart` | Core validators, `Flod.*` factories, `safeParse`, i18n |
-| `package:flod/dio.dart` | `FlodValidateInterceptor` — Dio middleware |
-| `package:flod/guard.dart` | `JsonGuard` — JSON security layer |
+| `package:flod/flod.dart` | Core validators, `Flod.*` factories, `safeParse` / `parse` (sync + async), **`ValidationException`**, **`FlodDefaultLocale`**, `FlodConfig`, i18n codes & resolvers |
+| `package:flod/dio.dart` | `FlodValidateInterceptor` **and** a full re-export of `package:dio/dio.dart` (`Dio`, `DioException`, …) — one import is enough |
+| `package:flod/guard.dart` | `JsonGuard` / `JsonGuardOptions` — JSON security layer |
 | `package:flod/form.dart` | `FlodFormAdapter` — pure Dart, Flutter-ready |
 
+> **v1.0.3:** `ValidationException` and `FlodDefaultLocale` are public exports. Prefer these over any `package:flod/src/...` import (private paths are not part of the supported API).
 ---
 
 ## Quick start
@@ -134,27 +135,40 @@ compiled.safeParse(payload);
 
 | Method | On success | On failure | Use when |
 |---|---|---|---|
-| `safeParse(data)` | `FlodSuccess<T>` | `FlodFailure<T>` | HTTP handlers, UI, anywhere you want control |
-| `parse(data)` | `T` | throws `ValidationException` | Internal trusted paths, "fail fast" |
-| `safeParseAsync(data)` | `Future<FlodSuccess<T>>` | `Future<FlodFailure<T>>` | Schemas with `.refineAsync()` / `.superRefineAsync()` |
-| `parseAsync(data)` | `Future<T>` | throws | Async fail-fast |
+| `safeParse(data, {abortEarly})` | `FlodSuccess<T>` | `FlodFailure<T>` | HTTP handlers, UI, anywhere you want control |
+| `parse(data, {abortEarly})` | `T` | throws **`ValidationException`** | Internal trusted paths, "fail fast" |
+| `safeParseAsync(data, {abortEarly})` | `Future<FlodSuccess<T>>` | `Future<FlodFailure<T>>` | Schemas with `.refineAsync()` / `.superRefineAsync()` |
+| `parseAsync(data, {abortEarly})` | `Future<T>` | throws **`ValidationException`** | Async fail-fast |
+
+`ValidationException` is exported from `package:flod/flod.dart` (no private `src/` import). Each instance exposes `e.errors` — a `List<FlodError>` with path, code, params, and value.
 
 ```dart
+import 'package:flod/flod.dart';
+
 try {
   final user = userSchema.parse(untrustedJson);
 } on ValidationException catch (e) {
   // e.errors — full FlodError list with paths & codes
+  for (final err in e.errors) {
+    print('${err.path.toReadable()}: ${err.code}');
+  }
 }
 ```
 
-**Abort early** — stop at the first error (faster invalid paths):
+**Abort early** — stop at the first error (faster invalid paths). Two equivalent styles:
 
 ```dart
+// 1) Bake into the schema (all subsequent parses abort early)
 final strictFast = schema.stopOnFirstError();
-// or per-call:
+strictFast.safeParse(data);
+
+// 2) Per-call flag (v1.0.3+) — forwarded into validate / validateAsync
 schema.safeParse(data, abortEarly: true);
+schema.parse(data, abortEarly: true);
+await schema.safeParseAsync(data, abortEarly: true);
 ```
 
+When `abortEarly` is `true` (or the schema used `stopOnFirstError()`), a multi-field object typically returns **one** error instead of collecting all field failures.
 ---
 
 ## Schema building blocks
@@ -410,6 +424,7 @@ Structural security **before** schema validation:
 
 ```dart
 import 'package:flod/guard.dart';
+import 'package:flod/flod.dart'; // for ValidationException when using OrThrow
 
 const guard = JsonGuard(
   options: JsonGuardOptions(
@@ -421,26 +436,62 @@ const guard = JsonGuard(
   ),
 );
 
+// Recommended — no exceptions
 final result = guard.parseJson(rawHttpBody, userSchema);
-// or: guard.guard(decoded, schema)
+if (result is FlodFailure) {
+  print(result.toReadable());
+}
+
+// Fail-fast — throws ValidationException (same type as schema.parse)
+try {
+  final data = guard.parseJsonOrThrow(rawHttpBody, userSchema);
+} on ValidationException catch (e) {
+  print(e.errors);
+}
+
+// Already-decoded JSON:
+// guard.guard(decoded, schema)
 ```
+
+| Method | On failure |
+|---|---|
+| `parseJson` / `guard` | returns `FlodFailure` (does **not** throw) |
+| `parseJsonOrThrow` | throws `ValidationException` |
 
 Blocks: prototype pollution keys, excessive depth/key budget, oversized strings/arrays, invalid JSON.
 
 ### FlodValidateInterceptor — Dio middleware
 
+`package:flod/dio.dart` re-exports Dio (v1.0.3+), so you do **not** need a separate `import 'package:dio/dio.dart'` for `Dio` / `DioException`:
+
 ```dart
 import 'package:flod/dio.dart';
+import 'package:flod/flod.dart'; // ValidationException
+import 'package:flod/guard.dart';
+
+final dio = Dio();
 
 dio.interceptors.add(FlodValidateInterceptor(
   schema: postSchema,
   guard: guard, // optional — security first, then schema
   extractData: (r) => (r.data as Map)['data'], // unwrap `{ data: ... }` envelopes
 ));
+
+try {
+  final response = await dio.get('/posts/1');
+  // response.data is already validated (+ transformed) output
+} on DioException catch (e) {
+  if (e.error is ValidationException) {
+    final ve = e.error as ValidationException;
+    print(ve.errors); // FlodError list with paths & codes
+  } else {
+    print(e.message); // network / transport failure
+  }
+}
 ```
 
 On success: replaces `response.data` with validated, typed output.
-On failure: `DioException` with `ValidationException` inside.
+On failure: rejects with `DioException` whose `error` is a `ValidationException`.
 
 Standalone helper (no Dio instance needed):
 
@@ -451,7 +502,6 @@ FlodValidateInterceptor.validatePayload(
   guard: guard,
 );
 ```
-
 ### FlodFormAdapter — form bridge
 
 Pure Dart — no Flutter dependency required at the adapter level. See [Developer experience](#developer-experience--readable-errors) for a usage example. Built directly on top of `getFieldsMap()`, so form errors and API errors always stay in sync with the same schema.
@@ -511,17 +561,21 @@ hot.safeParse(apiPayload); // use this in request handlers
 
 Errors are **code + params** — text lives in a resolver, not hard-coded in validators.
 
+`FlodDefaultLocale` (built-in English compiler) and `FlodErrorCodes` are exported from `package:flod/flod.dart` (v1.0.3+ — no private `src/` import).
+
 ```dart
+import 'package:flod/flod.dart';
+
 FlodConfig.setup(
   localeCompiler: (code, params) {
     if (code == FlodErrorCodes.stringEmail) return 'Invalid email';
+    // Fall back to the built-in English strings for every other code
     return FlodDefaultLocale.compile(code, params);
   },
 );
 ```
 
-Built-in English: `FlodDefaultLocale`. Custom: `Flod.i18n(yourCompiler)`.
-
+Built-in English: `FlodDefaultLocale.compile`. Custom factory: `Flod.i18n(yourCompiler)`.
 ---
 
 ## Debug mode
@@ -546,7 +600,8 @@ Trace format:
 
 Flod v1.0 is feature-complete against its original design goals. All core engine, DX, security, performance, and integration layers described in this document are implemented and covered by the test suite:
 
-- ✅ Core parsing (`safeParse` / `parse`, sync & async)
+- ✅ Core parsing (`safeParse` / `parse`, sync & async, optional `abortEarly`)
+- ✅ Public `ValidationException` + `FlodDefaultLocale` on the main export
 - ✅ Full primitive + string-format validator suite (`email`, `url`, `uuid`, `phone`, `credit card/Luhn`, `CVV`, `regex`)
 - ✅ Transform pipeline, `nullable`/`optional`/`default handling`
 - ✅ Objects (`strict`/`passthrough`), nested paths, lists, unions & discriminated unions
@@ -555,8 +610,7 @@ Flod v1.0 is feature-complete against its original design goals. All core engine
 - ✅ `.secret()` PII masking across errors and debug traces
 - ✅ `i18n resolver` + `debug tracing`
 - ✅ Performance layer — `SchemaPool`, `ChainOptimization`, `ValidatorCompiler`
-- ✅ Integrations — `JsonGuard`, `FlodValidateInterceptor` (Dio), `FlodFormAdapter`
-
+- ✅ Integrations — `JsonGuard`, `FlodValidateInterceptor` (Dio re-export), `FlodFormAdapter`
 The only major item intentionally deferred is **typed static codegen** (`build_runner`) — see below.
 
 ---
@@ -592,8 +646,9 @@ Track progress in [CHANGELOG](CHANGELOG.md).
 ```bash
 cd flod
 dart pub get
-dart test                            # 78+ tests — core, integrations, performance layer
-dart run example/flod_example.dart   # full stress & privacy matrix
+dart test                            # 79+ tests — core, integrations, performance layer
+dart run example/flod_example.dart   # quick start & privacy demos
+dart run example/high_ex.dart        # full stress & privacy matrix
 ```
 
 ---

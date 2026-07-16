@@ -12,6 +12,7 @@ export 'src/core/performance/validator_compiler.dart';
 export 'src/core/validator.dart';
 // Most important: export all extensions (.nullable(), .optional(), etc.)
 export 'src/extensions/all_extensions.dart';
+export 'src/i18n/default_locale.dart';
 export 'src/i18n/errors/errors_codes.dart';
 export 'src/i18n/resolver.dart';
 export 'src/res/parse_result.dart';
@@ -20,6 +21,7 @@ export 'src/types/flod_error.dart';
 export 'src/types/path.dart';
 // Validators
 export 'src/validators/bool_validator/bool_validator.dart';
+export 'src/validators/exception_validator/validator_exception.dart';
 export 'src/validators/list_validator/list_validator.dart';
 export 'src/validators/literal_validator/literal_validator.dart';
 export 'src/validators/nullable_and_optional_validator/nullable_validator.dart';

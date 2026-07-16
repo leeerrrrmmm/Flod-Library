@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flod/flod.dart';
 import 'package:flod/src/integrations/json_guard.dart';
-import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 /// Dio middleware that validates JSON response bodies against a Flod schema.
 ///

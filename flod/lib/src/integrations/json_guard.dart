@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flod/flod.dart';
-import 'package:flod/src/validators/exception_validator/validator_exception.dart';
 
 /// Security limits applied before schema validation.
 ///
