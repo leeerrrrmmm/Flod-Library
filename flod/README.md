@@ -73,7 +73,7 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flod: ^1.0.0
+  flod: ^1.0.2
 ```
 
 **Entry points**
