@@ -798,7 +798,6 @@ cd flod
 dart pub get
 dart test                            # 95+ tests — core, integrations, performance, v1.1 features
 dart run example/flod_example.dart   # quick start & privacy demos
-dart run example/high_ex.dart        # full stress & privacy matrix
 ```
 
 ---
