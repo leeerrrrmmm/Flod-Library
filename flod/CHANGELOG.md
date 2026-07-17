@@ -1,3 +1,9 @@
+## 1.1.1
+
+### Docs
+
+- Remove `example/high_ex.dart` from the README run instructions — that file is excluded from the published package via `.pubignore`, so the command is not available to pub.dev consumers.
+
 ## 1.1.0
 
 Form & schema expressiveness release. Adds Zod-parity pieces that unblock Flutter forms and recursive data, plus a silent default-sharing fix.
