@@ -35,9 +35,9 @@ class RefineValidator<T> extends Validator<T> {
     this._customPath,
     this._code,
     this._params, {
-    String? message,
+    this._message,
     super.isSecret = false,
-  }) : _message = message;
+  });
 
   @override
   Validator? getFieldSchema(String key) => _inner.getFieldSchema(key);
@@ -189,9 +189,9 @@ class AsyncRefineValidator<T> extends Validator<T>
     this._customPath,
     this._code,
     this._params, {
-    String? message,
+    this._message,
     super.isSecret = false,
-  }) : _message = message;
+  });
 
   @override
   Validator? getFieldSchema(String key) => _inner.getFieldSchema(key);

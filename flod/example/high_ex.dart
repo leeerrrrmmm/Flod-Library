@@ -645,7 +645,7 @@ void main() async {
   final msgOk =
       inlineFail.getMessages().single == "Password too short" &&
       refineFail.getMessages().single == "Disposable emails are not allowed" &&
-      refineFail.errors.single.code != null;
+      refineFail.errors.single.code == "custom_refine";
   if (msgOk) {
     print(
       "   ✅ SUCCESS -> messages=${inlineFail.getMessages()} / "
@@ -1455,7 +1455,7 @@ void main() async {
   ultimateCheck(
     'ULT-25 Flod.coerce form strings → typed values',
     coerceOk is FlodSuccess<Map<String, dynamic>> &&
-        (coerceOk as FlodSuccess<Map<String, dynamic>>).data['age'] == 22 &&
+        coerceOk.data['age'] == 22 &&
         coerceOk.data['active'] == true,
   );
 
