@@ -2,8 +2,25 @@ import 'package:flod/flod.dart';
 import 'package:flod/src/core/decorator/default_decorator.dart';
 
 extension DefaultExtension<T> on Validator<T> {
-  /// Zod-compatible default value (Dart keyword prevents `.default()`).
-  DefaultDecorator<T> withDefault(T value) => DefaultDecorator<T>(this, value);
+  /// Zod-compatible default when input is missing/`null`.
+  ///
+  /// **Mutable defaults:** `List` / `Map` values are shallow-cloned on each
+  /// parse so mutations do not leak across calls. For nested mutables prefer
+  /// [withDefaultFactory]:
+  /// ```dart
+  /// Flod.list(schema: Flod.string()).withDefaultFactory(() => <String>[]);
+  /// ```
+  DefaultDecorator<T> withDefault(T value) =>
+      DefaultDecorator.value(this, value);
+
+  /// Factory default — [create] runs on every missing/`null` input.
+  ///
+  /// Use this for nested mutable structures you fully control:
+  /// ```dart
+  /// Flod.object({...}).withDefaultFactory(() => {'tags': <String>[]});
+  /// ```
+  DefaultDecorator<T> withDefaultFactory(T Function() create) =>
+      DefaultDecorator.factory(this, create);
 
   /// Deprecated — use [withDefault].
   @Deprecated('Use withDefault() instead.')
@@ -34,7 +51,8 @@ extension ValidatorExtensions<T> on Validator<T> {
     return (result as FlodSuccess<T>).data;
   }
 
-  /// Async parse — required for schemas with [refineAsync] / [superRefineAsync].
+  /// Async parse — required for schemas with [refineAsync] / [superRefineAsync]
+  /// / [LazyValidator] wrapping async inners.
   Future<ParseResult<T>> safeParseAsync(
     dynamic value, {
     bool? abortEarly,

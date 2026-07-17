@@ -19,47 +19,71 @@ abstract class BaseNumberValidator<T extends num> extends Validator<T> {
   BaseNumberValidator<T> custom(
     bool Function(T value) predicate, {
     required String code,
+    String? message,
     Map<String, dynamic>? metaParams,
   }) {
     return copyWith([
       ...rules,
-      CustomNumberRule<T>(predicate, code: code, metaParams: metaParams),
+      CustomNumberRule<T>(
+        predicate,
+        code: code,
+        message: message,
+        metaParams: metaParams,
+      ),
     ], isSecret: isSecret);
   }
 
-  BaseNumberValidator<T> min(T minVal, {String? code}) {
+  BaseNumberValidator<T> min(T minVal, {String? code, String? message}) {
     return copyWith([
       ...rules,
-      MinValueRule(minVal, code: code ?? FlodErrorCodes.numberMin),
+      MinValueRule(
+        minVal,
+        code: code ?? FlodErrorCodes.numberMin,
+        message: message,
+      ),
     ], isSecret: isSecret);
   }
 
-  BaseNumberValidator<T> max(T maxVal, {String? code}) {
+  BaseNumberValidator<T> max(T maxVal, {String? code, String? message}) {
     return copyWith([
       ...rules,
-      MaxValueRule(maxVal, code: code ?? FlodErrorCodes.numberMax),
+      MaxValueRule(
+        maxVal,
+        code: code ?? FlodErrorCodes.numberMax,
+        message: message,
+      ),
     ], isSecret: isSecret);
   }
 
-  BaseNumberValidator<T> positive({String? code}) {
-    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive);
-  }
-
-  BaseNumberValidator<T> nonPositive({String? code}) {
+  BaseNumberValidator<T> positive({String? code, String? message}) {
     return custom(
-      (v) => v <= 0,
-      code: code ?? FlodErrorCodes.numberNonPositive,
+      (v) => v > 0,
+      code: code ?? FlodErrorCodes.numberPositive,
+      message: message,
     );
   }
 
-  BaseNumberValidator<T> negative({String? code}) {
-    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative);
+  BaseNumberValidator<T> nonPositive({String? code, String? message}) {
+    return custom(
+      (v) => v <= 0,
+      code: code ?? FlodErrorCodes.numberNonPositive,
+      message: message,
+    );
   }
 
-  BaseNumberValidator<T> nonNegative({String? code}) {
+  BaseNumberValidator<T> negative({String? code, String? message}) {
+    return custom(
+      (v) => v < 0,
+      code: code ?? FlodErrorCodes.numberNegative,
+      message: message,
+    );
+  }
+
+  BaseNumberValidator<T> nonNegative({String? code, String? message}) {
     return custom(
       (v) => v >= 0,
       code: code ?? FlodErrorCodes.numberNonNegative,
+      message: message,
     );
   }
 }

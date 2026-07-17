@@ -59,71 +59,99 @@ class StringValidator extends Validator<String> with Transformable<String> {
   StringValidator _withRule(BaseStringRule rule) =>
       copyWith(rules: ChainUtils.append(rules, rule));
 
-  StringValidator min(int length, {String? code}) {
+  StringValidator min(int length, {String? code, String? message}) {
     return _withRule(
-      MinLengthRule(length, code: code ?? FlodErrorCodes.stringMin),
+      MinLengthRule(
+        length,
+        code: code ?? FlodErrorCodes.stringMin,
+        message: message,
+      ),
     );
   }
 
-  StringValidator max(int length, {String? code}) {
+  StringValidator max(int length, {String? code, String? message}) {
     return _withRule(
-      MaxLengthRule(length, code: code ?? FlodErrorCodes.stringMax),
+      MaxLengthRule(
+        length,
+        code: code ?? FlodErrorCodes.stringMax,
+        message: message,
+      ),
     );
   }
 
-  StringValidator length(int length, {String? code}) {
+  StringValidator length(int length, {String? code, String? message}) {
     return _withRule(
-      FixedLengthRule(length, code: code ?? FlodErrorCodes.stringFixedLength),
+      FixedLengthRule(
+        length,
+        code: code ?? FlodErrorCodes.stringFixedLength,
+        message: message,
+      ),
     );
   }
 
   /// Deprecated — use [length].
   @Deprecated('Use length() instead.')
-  StringValidator fixedLength(int len, {String? code}) =>
-      length(len, code: code);
+  StringValidator fixedLength(int len, {String? code, String? message}) =>
+      length(len, code: code, message: message);
 
-  StringValidator regex(RegExp pattern, {String? code}) {
+  StringValidator regex(RegExp pattern, {String? code, String? message}) {
     return _withRule(
-      RegexRule(pattern, code: code ?? FlodErrorCodes.stringRegex),
+      RegexRule(
+        pattern,
+        code: code ?? FlodErrorCodes.stringRegex,
+        message: message,
+      ),
     );
   }
 
-  StringValidator email({String? code}) => regex(
+  StringValidator email({String? code, String? message}) => regex(
     RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$'),
     code: code ?? FlodErrorCodes.stringEmail,
+    message: message,
   );
 
-  StringValidator creditCard({String? code}) => custom((value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
-    return _isValidLuhn(digits);
-  }, code: code ?? FlodErrorCodes.stringCreditCard);
+  StringValidator creditCard({String? code, String? message}) => custom(
+    (value) {
+      final digits = value.replaceAll(RegExp(r'\D'), '');
+      if (!RegExp(r'^[0-9]{13,19}$').hasMatch(digits)) return false;
+      return _isValidLuhn(digits);
+    },
+    code: code ?? FlodErrorCodes.stringCreditCard,
+    message: message,
+  );
 
-  StringValidator cvv({String? code}) =>
-      regex(RegExp(r'^\d{3,4}$'), code: code ?? FlodErrorCodes.stringCvv);
+  StringValidator cvv({String? code, String? message}) => regex(
+    RegExp(r'^\d{3,4}$'),
+    code: code ?? FlodErrorCodes.stringCvv,
+    message: message,
+  );
 
-  StringValidator html5Email({String? code}) => regex(
+  StringValidator html5Email({String? code, String? message}) => regex(
     RegExp(
       r'''^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$''',
     ),
     code: code ?? FlodErrorCodes.stringEmail,
+    message: message,
   );
 
-  StringValidator url({String? code}) => regex(
+  StringValidator url({String? code, String? message}) => regex(
     RegExp(r'^https?:\/\/[\w\-]+(\.[\w\-]+)+[/#?]?.*$'),
     code: code ?? FlodErrorCodes.stringUrl,
+    message: message,
   );
 
-  StringValidator phoneNumber({String? code}) => regex(
+  StringValidator phoneNumber({String? code, String? message}) => regex(
     RegExp(r'^\+?[1-9]\d{6,14}$'),
     code: code ?? FlodErrorCodes.stringPhoneNumber,
+    message: message,
   );
 
-  StringValidator uuid({String? code}) => regex(
+  StringValidator uuid({String? code, String? message}) => regex(
     RegExp(
       r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
     ),
     code: code ?? FlodErrorCodes.stringUuid,
+    message: message,
   );
 
   bool _isValidLuhn(String digits) {
@@ -141,31 +169,43 @@ class StringValidator extends Validator<String> with Transformable<String> {
     return sum % 10 == 0;
   }
 
-  StringValidator minUppercase(int limit, {String? code}) => custom(
-    (v) => v.replaceAll(RegExp(r'[^A-Z]'), '').length >= limit,
-    code: code ?? FlodErrorCodes.stringMinUppercase,
-    metaParams: {'limit': limit},
-  );
+  StringValidator minUppercase(int limit, {String? code, String? message}) =>
+      custom(
+        (v) => v.replaceAll(RegExp(r'[^A-Z]'), '').length >= limit,
+        code: code ?? FlodErrorCodes.stringMinUppercase,
+        message: message,
+        metaParams: {'limit': limit},
+      );
 
-  StringValidator minNumbers(int limit, {String? code}) => custom(
-    (v) => v.replaceAll(RegExp(r'[^0-9]'), '').length >= limit,
-    code: code ?? FlodErrorCodes.stringMinNumbers,
-    metaParams: {'limit': limit},
-  );
+  StringValidator minNumbers(int limit, {String? code, String? message}) =>
+      custom(
+        (v) => v.replaceAll(RegExp(r'[^0-9]'), '').length >= limit,
+        code: code ?? FlodErrorCodes.stringMinNumbers,
+        message: message,
+        metaParams: {'limit': limit},
+      );
 
-  StringValidator minSymbols(int limit, {String? code}) => custom(
-    (v) => v.replaceAll(RegExp(r'[A-Za-z0-9]'), '').length >= limit,
-    code: code ?? FlodErrorCodes.stringMinSymbols,
-    metaParams: {'limit': limit},
-  );
+  StringValidator minSymbols(int limit, {String? code, String? message}) =>
+      custom(
+        (v) => v.replaceAll(RegExp(r'[A-Za-z0-9]'), '').length >= limit,
+        code: code ?? FlodErrorCodes.stringMinSymbols,
+        message: message,
+        metaParams: {'limit': limit},
+      );
 
   StringValidator custom(
     bool Function(String value) predicate, {
     required String code,
+    String? message,
     Map<String, dynamic>? metaParams,
   }) {
     return _withRule(
-      CustomStringRule(predicate, code: code, metaParams: metaParams),
+      CustomStringRule(
+        predicate,
+        code: code,
+        message: message,
+        metaParams: metaParams,
+      ),
     );
   }
 
@@ -209,6 +249,7 @@ class StringValidator extends Validator<String> with Transformable<String> {
             path: path,
             code: rule.code,
             params: rule.params,
+            message: rule.message,
             value: isSecret ? null : transformed,
             isSecret: isSecret,
           ),

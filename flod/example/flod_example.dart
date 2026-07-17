@@ -10,11 +10,15 @@ import 'package:flod/flod.dart';
 import 'package:flod/guard.dart';
 
 void main() {
-  print('=== Flod quick start ===\n');
+  print('=== Flod quick start (v1.1.0) ===\n');
 
   basicQuickStart();
   parseVsSafeParse();
   transformPipeline();
+  coerceFormDemo();
+  recursiveLazyDemo();
+  inlineMessageDemo();
+  defaultsDemo();
   crossFieldValidation();
   secretFieldsDemo();
   jsonGuardDemo();
@@ -122,19 +126,173 @@ void transformPipeline() {
 }
 
 /// -------------------------------------------------------------
-/// 4. Cross-field validation — refine / superRefine
+/// 4. Coercion — Flod.coerce.* (Flutter forms / stringly JSON)
+/// -------------------------------------------------------------
+void coerceFormDemo() {
+  print('--- 4. Coercion (Flod.coerce.*) ---');
+
+  final formSchema = Flod.object({
+    'age': Flod.coerce.int().min(18, message: 'Must be 18+'),
+    'price': Flod.coerce.double().nonNegative(),
+    'active': Flod.coerce.boolean(),
+    'note': Flod.coerce.string().max(200),
+  });
+
+  final ok = formSchema.safeParse({
+    'age': '22',
+    'price': '9.99',
+    'active': 'yes',
+    'note': 42,
+  });
+
+  if (ok is FlodSuccess<Map<String, dynamic>>) {
+    print('Coerced form payload: ${ok.data}');
+  }
+
+  final bad = formSchema.safeParse({
+    'age': '12',
+    'price': '-1',
+    'active': 'maybe',
+    'note': 'ok',
+  });
+
+  if (bad is FlodFailure<Map<String, dynamic>>) {
+    print('Coercion / rule failures:');
+    print(bad.getFieldsMap());
+  }
+
+  // Plain Flod.int() stays strict — strings are rejected.
+  final strict = Flod.int().safeParse('42');
+  print(
+    'Strict Flod.int() on "42": '
+    '${strict is FlodFailure ? 'rejected (expected)' : 'unexpected success'}',
+  );
+
+  print('');
+}
+
+/// -------------------------------------------------------------
+/// 5. Recursive schemas — Flod.lazy()
+/// -------------------------------------------------------------
+void recursiveLazyDemo() {
+  print('--- 5. Recursive schemas (Flod.lazy) ---');
+
+  late final Validator<Map<String, dynamic>> category;
+  category = Flod.object({
+    'name': Flod.string().min(1),
+    'children': Flod.list(schema: Flod.lazy(() => category)),
+  });
+
+  final tree = category.safeParse({
+    'name': 'root',
+    'children': [
+      {
+        'name': 'child',
+        'children': [
+          {'name': 'leaf', 'children': <dynamic>[]},
+        ],
+      },
+    ],
+  });
+
+  if (tree is FlodSuccess<Map<String, dynamic>>) {
+    print('Recursive tree OK: ${tree.data}');
+  }
+
+  final bad = category.safeParse({
+    'name': 'root',
+    'children': [
+      {'name': '', 'children': <dynamic>[]},
+    ],
+  });
+
+  if (bad is FlodFailure<Map<String, dynamic>>) {
+    print('Deep path error: ${bad.getFieldsMap()}');
+  }
+
+  // compile() leaves lazy nodes intact (no stack overflow on recursive graphs).
+  final compiled = category.compile();
+  final compiledOk = compiled.safeParse({
+    'name': 'compiled',
+    'children': <dynamic>[],
+  });
+  print(
+    'Compiled lazy tree: '
+    '${compiledOk is FlodSuccess ? 'ok' : 'failed'}',
+  );
+
+  print('');
+}
+
+/// -------------------------------------------------------------
+/// 6. Inline message: on rules & refine
+/// -------------------------------------------------------------
+void inlineMessageDemo() {
+  print('--- 6. Inline message: ---');
+
+  final password = Flod.string().min(8, message: 'Password too short');
+  final short = password.safeParse('123') as FlodFailure<String>;
+  print('Rule message: ${short.getMessages()}');
+
+  final email = Flod.string().email().refine(
+    (v) => !v.endsWith('@tempmail.com'),
+    message: 'Disposable emails are not allowed',
+  );
+  final disposable =
+      email.safeParse('a@tempmail.com') as FlodFailure<String>;
+  print('Refine message: ${disposable.getMessages()}');
+  print('Code still present: ${disposable.errors.single.code}');
+
+  print('');
+}
+
+/// -------------------------------------------------------------
+/// 7. Defaults — withDefault / withDefaultFactory (safe cloning)
+/// -------------------------------------------------------------
+void defaultsDemo() {
+  print('--- 7. Defaults (withDefault / withDefaultFactory) ---');
+
+  final tags = Flod.list(schema: Flod.string()).withDefault(<String>[]);
+  final a = (tags.safeParse(null) as FlodSuccess<List<String>>).data;
+  a.add('mutated');
+  final b = (tags.safeParse(null) as FlodSuccess<List<String>>).data;
+  print(
+    'withDefault([]) clones: a=$a, b=$b '
+    '(identical=${identical(a, b)})',
+  );
+
+  final nested = Flod.object({
+    'tags': Flod.list(schema: Flod.string()),
+  }).withDefaultFactory(() => {'tags': <String>[]});
+
+  final first =
+      (nested.safeParse(null) as FlodSuccess<Map<String, dynamic>>).data;
+  (first['tags'] as List).add('x');
+  final second =
+      (nested.safeParse(null) as FlodSuccess<Map<String, dynamic>>).data;
+  print(
+    'withDefaultFactory nested: first=${first['tags']}, '
+    'second=${second['tags']}',
+  );
+
+  print('');
+}
+
+/// -------------------------------------------------------------
+/// 8. Cross-field validation — refine / superRefine
 /// -------------------------------------------------------------
 void crossFieldValidation() {
-  print('--- 4. Cross-field validation ---');
+  print('--- 8. Cross-field validation ---');
 
   final signupSchema =
       Flod.object({
-        'password': Flod.string().min(8),
+        'password': Flod.string().min(8, message: 'Password too short'),
         'confirmPassword': Flod.string(),
       }).refine(
         (data) => data['password'] == data['confirmPassword'],
         code: 'passwords_match',
         path: ['confirmPassword'],
+        message: 'Passwords do not match',
       );
 
   final result = signupSchema.safeParse({
@@ -142,19 +300,20 @@ void crossFieldValidation() {
     'confirmPassword': 'doesNotMatch',
   });
 
-  if (result is FlodFailure) {
+  if (result is FlodFailure<Map<String, dynamic>>) {
     print('Refine caught mismatch:');
     print(result.toReadable());
+    print(result.getFieldsMap());
   }
 
   print('');
 }
 
 /// -------------------------------------------------------------
-/// 5. .secret() — PII-safe error output
+/// 9. .secret() — PII-safe error output
 /// -------------------------------------------------------------
 void secretFieldsDemo() {
-  print('--- 5. Secret fields (.secret()) ---');
+  print('--- 9. Secret fields (.secret()) ---');
 
   final publicSchema = Flod.object({
     'email': Flod.string().email(),
@@ -189,10 +348,10 @@ void secretFieldsDemo() {
 }
 
 /// -------------------------------------------------------------
-/// 6. JsonGuard — structural security before schema validation
+/// 10. JsonGuard — structural security before schema validation
 /// -------------------------------------------------------------
 void jsonGuardDemo() {
-  print('--- 6. JsonGuard ---');
+  print('--- 10. JsonGuard ---');
 
   const guard = JsonGuard(
     options: JsonGuardOptions(
@@ -218,10 +377,10 @@ void jsonGuardDemo() {
 }
 
 /// -------------------------------------------------------------
-/// 7. Compiled schema — hot path for production
+/// 11. Compiled schema — hot path for production
 /// -------------------------------------------------------------
 void compiledSchemaDemo() {
-  print('--- 7. Compiled schema (hot path) ---');
+  print('--- 11. Compiled schema (hot path) ---');
 
   final productionSchema = Flod.object({
     'id': Flod.int().positive(),

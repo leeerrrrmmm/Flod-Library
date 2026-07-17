@@ -45,23 +45,32 @@ class IntValidator extends Validator<int> with Transformable<int> {
   IntValidator _withRule(BaseNumberRule<int> rule) =>
       copyWith(rules: ChainUtils.append(rules, rule));
 
-  IntValidator min(int minBound, {String? code}) {
+  IntValidator min(int minBound, {String? code, String? message}) {
     return _withRule(
-      MinValueRule<int>(minBound, code: code ?? FlodErrorCodes.numberMin),
+      MinValueRule<int>(
+        minBound,
+        code: code ?? FlodErrorCodes.numberMin,
+        message: message,
+      ),
     );
   }
 
-  IntValidator max(int maxBound, {String? code}) {
+  IntValidator max(int maxBound, {String? code, String? message}) {
     return _withRule(
-      MaxValueRule<int>(maxBound, code: code ?? FlodErrorCodes.numberMax),
+      MaxValueRule<int>(
+        maxBound,
+        code: code ?? FlodErrorCodes.numberMax,
+        message: message,
+      ),
     );
   }
 
-  IntValidator multipleOf(int factor, {String? code}) {
+  IntValidator multipleOf(int factor, {String? code, String? message}) {
     return _withRule(
       MultipleOfRule<int>(
         factor,
         code: code ?? FlodErrorCodes.numberMultipleOf,
+        message: message,
       ),
     );
   }
@@ -69,32 +78,48 @@ class IntValidator extends Validator<int> with Transformable<int> {
   IntValidator custom(
     bool Function(int value) predicate, {
     required String code,
+    String? message,
     Map<String, dynamic>? metaParams,
   }) {
     return _withRule(
-      CustomNumberRule<int>(predicate, code: code, metaParams: metaParams),
+      CustomNumberRule<int>(
+        predicate,
+        code: code,
+        message: message,
+        metaParams: metaParams,
+      ),
     );
   }
 
-  IntValidator positive({String? code}) {
-    return custom((v) => v > 0, code: code ?? FlodErrorCodes.numberPositive);
+  IntValidator positive({String? code, String? message}) {
+    return custom(
+      (v) => v > 0,
+      code: code ?? FlodErrorCodes.numberPositive,
+      message: message,
+    );
   }
 
-  IntValidator nonPositive({String? code}) {
+  IntValidator nonPositive({String? code, String? message}) {
     return custom(
       (v) => v <= 0,
       code: code ?? FlodErrorCodes.numberNonPositive,
+      message: message,
     );
   }
 
-  IntValidator negative({String? code}) {
-    return custom((v) => v < 0, code: code ?? FlodErrorCodes.numberNegative);
+  IntValidator negative({String? code, String? message}) {
+    return custom(
+      (v) => v < 0,
+      code: code ?? FlodErrorCodes.numberNegative,
+      message: message,
+    );
   }
 
-  IntValidator nonNegative({String? code}) {
+  IntValidator nonNegative({String? code, String? message}) {
     return custom(
       (v) => v >= 0,
       code: code ?? FlodErrorCodes.numberNonNegative,
+      message: message,
     );
   }
 
@@ -132,6 +157,7 @@ class IntValidator extends Validator<int> with Transformable<int> {
             path: path,
             code: rule.code,
             params: rule.params,
+            message: rule.message,
             value: isSecret ? null : finalValue,
             isSecret: isSecret,
           ),

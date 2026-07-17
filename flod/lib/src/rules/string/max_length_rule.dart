@@ -3,7 +3,7 @@ import 'package:flod/src/rules/string/base_string_rule.dart';
 class MaxLengthRule extends BaseStringRule {
   final int max;
 
-  MaxLengthRule(this.max, {required super.code});
+  MaxLengthRule(this.max, {required super.code, super.message});
 
   @override
   bool check(String value) => value.length <= max;
