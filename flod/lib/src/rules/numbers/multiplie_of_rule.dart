@@ -3,7 +3,7 @@ import 'package:flod/src/rules/numbers/base_number_rule.dart';
 class MultipleOfRule<T extends num> extends BaseNumberRule<T> {
   final T factor;
 
-  const MultipleOfRule(this.factor, {required super.code});
+  const MultipleOfRule(this.factor, {required super.code, super.message});
 
   @override
   bool check(T value) {

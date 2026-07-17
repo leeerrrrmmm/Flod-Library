@@ -66,7 +66,7 @@ class NullableValidator<T> extends Validator<T?> with Transformable<T?> {
                 path: e.path,
                 code: e.code,
                 params: e.params,
-
+                message: e.message,
                 value: null,
                 isSecret: true,
               ),

@@ -1,3 +1,91 @@
+## 1.1.0
+
+Form & schema expressiveness release. Adds Zod-parity pieces that unblock Flutter forms and recursive data, plus a silent default-sharing fix.
+
+### Added — `Flod.coerce.*` (Zod `z.coerce`)
+
+- `Flod.coerce.int()` / `.double()` / `.boolean()` / `.string()` coerce **before** type checks and rules.
+- Typical Flutter form / stringly JSON usage:
+
+  ```dart
+  Flod.object({
+    'age': Flod.coerce.int().min(18),
+    'price': Flod.coerce.double().nonNegative(),
+    'active': Flod.coerce.boolean(),
+  }).safeParse({'age': '22', 'price': '9.99', 'active': 'yes'});
+  ```
+
+- Accepted inputs (exact):
+  - **int:** `int`, other `num`, numeric `String`, `bool` (`true`→1 / `false`→0)
+  - **double:** `double`, `int`/`num`, numeric `String`, `bool`
+  - **boolean:** `bool`, `0`/`1`, strings `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off` (case-insensitive)
+  - **string:** any non-null via `Object.toString()`
+- Plain `Flod.int()` / `Flod.boolean()` remain **strict** (no coercion) — use `coerce` when input may be a `String`.
+
+### Added — `Flod.lazy(() => schema)` (Zod `.lazy()`)
+
+- Deferred schema factory for recursive / mutually recursive structures (comment trees, categories).
+- Factory result is cached after first resolve.
+- `compile()` **does not** expand lazy nodes (avoids stack overflow on recursive graphs).
+- Implements `AsyncValidator` and forwards to async inners when needed.
+
+  ```dart
+  late final Validator<Map<String, dynamic>> category;
+  category = Flod.object({
+    'name': Flod.string(),
+    'children': Flod.list(schema: Flod.lazy(() => category)),
+  });
+  ```
+
+### Added — inline `message:` on rules & refine
+
+- Optional `message:` on string/number/list rules and on `.refine()` / `.refineAsync()` / `ctx.addIssue(...)`.
+- Resolver priority: **inline `message` → locale compiler**.
+- `code` is still stored on `FlodError` for logging / later i18n.
+
+  ```dart
+  Flod.string().min(8, message: 'Password too short');
+  Flod.string().email().refine(
+    (e) => !e.endsWith('@tempmail.com'),
+    message: 'Disposable emails are not allowed',
+  );
+  ```
+
+### Added — `withDefaultFactory`
+
+- `validator.withDefaultFactory(() => value)` runs the factory on every missing/`null` input.
+
+### Fixed — mutable `withDefault` sharing
+
+- `withDefault([])` / `withDefault({})` no longer return the **same** instance on every parse.
+- `List` values are cloned via `.toList()`; `Map<String, dynamic>` via `Map<String, dynamic>.from`.
+- Prefer `withDefaultFactory` for nested mutable structures.
+
+### Docs
+
+- README documents coerce, lazy, `message:`, safe defaults, leaf-level refine, UTF-16 length units, and refine chain short-circuit vs `superRefine`.
+- Path format remains JSON-style indices: `items[1].qty` (not `items.1.qty`).
+
+### Migration (from 1.0.x)
+
+| Topic | Action |
+|---|---|
+| Forms with `TextFormField` numbers/bools | Switch fields to `Flod.coerce.int()` / `.double()` / `.boolean()` |
+| Recursive schemas | Use `Flod.lazy(() => …)` with `late final` |
+| Quick UI copy without i18n | Pass `message:` on rules |
+| Mutable list/map defaults | Prefer `withDefaultFactory`; `withDefault(list/map)` is now safely cloned |
+| Existing `Flod.int()` / `withDefault(0)` call sites | **No change required** |
+
+No breaking signature removals — only additive APIs and safer default cloning.
+
+---
+
+## 1.0.4
+
+Docs alignment release (paths, `.secret()` surface, Dio entry point). See package README.
+
+---
+
 ## 1.0.3
 
 Public-API hardening release. Fixes analyzer errors that appeared when consuming Flod from other apps (e.g. `on ValidationException`, `abortEarly: true`, `Dio` / `DioException`, `FlodDefaultLocale`) while following the documented README examples.

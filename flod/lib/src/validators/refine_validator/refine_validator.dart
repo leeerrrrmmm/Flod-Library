@@ -6,6 +6,7 @@ class RefineValidator<T> extends Validator<T> {
   final List<String>? _customPath;
   final String _code;
   final Map<String, dynamic>? _params;
+  final String? _message;
 
   /// Inner validator wrapped by this refine layer.
   Validator<T> get inner => _inner;
@@ -25,14 +26,18 @@ class RefineValidator<T> extends Validator<T> {
   /// Error params for [ValidatorCompiler].
   Map<String, dynamic>? get errorParams => _params;
 
+  /// Inline message for [ValidatorCompiler].
+  String? get errorMessage => _message;
+
   RefineValidator(
     this._inner,
     this._predicate,
     this._customPath,
     this._code,
     this._params, {
+    String? message,
     super.isSecret = false,
-  });
+  }) : _message = message;
 
   @override
   Validator? getFieldSchema(String key) => _inner.getFieldSchema(key);
@@ -45,6 +50,7 @@ class RefineValidator<T> extends Validator<T> {
       _customPath,
       _code,
       _params,
+      message: _message,
       isSecret: true,
     );
   }
@@ -57,6 +63,7 @@ class RefineValidator<T> extends Validator<T> {
     _customPath,
     _code,
     _params,
+    message: _message,
     isSecret: isSecret,
   );
 
@@ -67,6 +74,7 @@ class RefineValidator<T> extends Validator<T> {
     _customPath,
     _code,
     _params,
+    message: _message,
     isSecret: isSecret,
   );
 
@@ -124,6 +132,7 @@ class RefineValidator<T> extends Validator<T> {
             path: targetPath,
             code: _code,
             params: {'value': isSecret ? null : data, ...?_params},
+            message: _message,
             value: isSecret ? null : data,
             isSecret: isSecret,
           ),
@@ -135,6 +144,7 @@ class RefineValidator<T> extends Validator<T> {
           path: path,
           code: FlodErrorCodes.refineException,
           params: _params ?? {},
+          message: _message,
           value: data,
           isSecret: isSecret,
         ),
@@ -160,6 +170,7 @@ class AsyncRefineValidator<T> extends Validator<T>
   final List<String>? _customPath;
   final String _code;
   final Map<String, dynamic>? _params;
+  final String? _message;
 
   Validator<T> get inner => _inner;
 
@@ -170,6 +181,7 @@ class AsyncRefineValidator<T> extends Validator<T>
   List<String>? get customPath => _customPath;
   String get errorCode => _code;
   Map<String, dynamic>? get errorParams => _params;
+  String? get errorMessage => _message;
 
   AsyncRefineValidator(
     this._inner,
@@ -177,8 +189,9 @@ class AsyncRefineValidator<T> extends Validator<T>
     this._customPath,
     this._code,
     this._params, {
+    String? message,
     super.isSecret = false,
-  });
+  }) : _message = message;
 
   @override
   Validator? getFieldSchema(String key) => _inner.getFieldSchema(key);
@@ -190,6 +203,7 @@ class AsyncRefineValidator<T> extends Validator<T>
     _customPath,
     _code,
     _params,
+    message: _message,
     isSecret: true,
   );
 
@@ -200,6 +214,7 @@ class AsyncRefineValidator<T> extends Validator<T>
     _customPath,
     _code,
     _params,
+    message: _message,
     isSecret: isSecret,
   );
 
@@ -210,6 +225,7 @@ class AsyncRefineValidator<T> extends Validator<T>
     _customPath,
     _code,
     _params,
+    message: _message,
     isSecret: isSecret,
   );
 
@@ -257,6 +273,7 @@ class AsyncRefineValidator<T> extends Validator<T>
             path: targetPath,
             code: _code,
             params: {'value': isSecret ? null : data, ...?_params},
+            message: _message,
             value: isSecret ? null : data,
             isSecret: isSecret,
           ),
@@ -268,6 +285,7 @@ class AsyncRefineValidator<T> extends Validator<T>
           path: path,
           code: FlodErrorCodes.refineException,
           params: _params ?? {},
+          message: _message,
           value: data,
           isSecret: isSecret,
         ),
@@ -296,10 +314,19 @@ class AsyncRefineValidator<T> extends Validator<T>
 }
 
 extension RefineExtension<T> on Validator<T> {
+  /// Custom predicate on any schema (objects **and** leaf primitives).
+  ///
+  /// ```dart
+  /// Flod.string().email().refine(
+  ///   (v) => !v.endsWith('@tempmail.com'),
+  ///   message: 'Disposable emails are not allowed',
+  /// );
+  /// ```
   Validator<T> refine(
     bool Function(T value) predicate, {
     List<String>? path,
     String? code,
+    String? message,
     Map<String, dynamic>? params,
   }) {
     return RefineValidator<T>(
@@ -308,6 +335,7 @@ extension RefineExtension<T> on Validator<T> {
       path,
       code ?? 'custom_refine',
       params,
+      message: message,
       isSecret: isSecret,
     );
   }
@@ -317,6 +345,7 @@ extension RefineExtension<T> on Validator<T> {
     Future<bool> Function(T value) predicate, {
     List<String>? path,
     String? code,
+    String? message,
     Map<String, dynamic>? params,
   }) {
     return AsyncRefineValidator<T>(
@@ -325,6 +354,7 @@ extension RefineExtension<T> on Validator<T> {
       path,
       code ?? 'custom_refine',
       params,
+      message: message,
       isSecret: isSecret,
     );
   }
@@ -335,6 +365,7 @@ extension RefineObjectExtension on ObjectValidator {
     bool Function(Map<String, dynamic> value) predicate, {
     List<String>? path,
     String? code,
+    String? message,
     Map<String, dynamic>? params,
   }) {
     return RefineValidator<Map<String, dynamic>>(
@@ -343,6 +374,7 @@ extension RefineObjectExtension on ObjectValidator {
       path,
       code ?? 'custom_refine',
       params,
+      message: message,
       isSecret: isSecret,
     );
   }
@@ -351,6 +383,7 @@ extension RefineObjectExtension on ObjectValidator {
     Future<bool> Function(Map<String, dynamic> value) predicate, {
     List<String>? path,
     String? code,
+    String? message,
     Map<String, dynamic>? params,
   }) {
     return AsyncRefineValidator<Map<String, dynamic>>(
@@ -359,6 +392,7 @@ extension RefineObjectExtension on ObjectValidator {
       path,
       code ?? 'custom_refine',
       params,
+      message: message,
       isSecret: isSecret,
     );
   }

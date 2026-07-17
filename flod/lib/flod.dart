@@ -21,7 +21,9 @@ export 'src/types/flod_error.dart';
 export 'src/types/path.dart';
 // Validators
 export 'src/validators/bool_validator/bool_validator.dart';
+export 'src/validators/coerce/coerce_validators.dart';
 export 'src/validators/exception_validator/validator_exception.dart';
+export 'src/validators/lazy_validator/lazy_validator.dart';
 export 'src/validators/list_validator/list_validator.dart';
 export 'src/validators/literal_validator/literal_validator.dart';
 export 'src/validators/nullable_and_optional_validator/nullable_validator.dart';
@@ -52,6 +54,18 @@ abstract final class Flod {
   /// Zod-compatible: `z.boolean()` → `Flod.boolean()`.
   static BoolValidator boolean() => SchemaPool.boolean;
 
+  /// Zod-style coercion helpers (`z.coerce.*`).
+  ///
+  /// Use for Flutter forms and stringly-typed JSON:
+  /// ```dart
+  /// Flod.object({
+  ///   'age': Flod.coerce.int().min(18),
+  ///   'price': Flod.coerce.double().nonNegative(),
+  ///   'active': Flod.coerce.boolean(),
+  /// });
+  /// ```
+  static const FlodCoerce coerce = FlodCoerce();
+
   /// List/collection validator with inner element schema support
   static ListValidator<T> list<T>({Validator<T>? schema}) =>
       ListValidator<T>(schema: schema);
@@ -60,16 +74,34 @@ abstract final class Flod {
   static ObjectValidator object(Map<String, Validator> schema) =>
       ObjectValidator(schema);
 
+  /// Deferred schema factory for recursive / mutually-recursive structures
+  /// (Zod `.lazy()`).
+  ///
+  /// ```dart
+  /// late final Validator<Map<String, dynamic>> category;
+  /// category = Flod.object({
+  ///   'name': Flod.string(),
+  ///   'children': Flod.list(schema: Flod.lazy(() => category)),
+  /// });
+  /// ```
+  static LazyValidator<T> lazy<T>(Validator<T> Function() schema) =>
+      LazyValidator<T>(schema);
+
   /// Object validator with strict key structure and conditional validations
   static Validator<Map<String, dynamic>> refineObject(
     Map<String, Validator> schema,
     bool Function(Map<String, dynamic> value) predicate, {
     List<String>? path,
     String? code,
+    String? message,
     Map<String, dynamic>? params,
-  }) => ObjectValidator(
-    schema,
-  ).refine(predicate, path: path, code: code, params: params);
+  }) => ObjectValidator(schema).refine(
+    predicate,
+    path: path,
+    code: code,
+    message: message,
+    params: params,
+  );
 
   /// Union-type validator for polymorphic structures
   static UnionValidator union(List<Validator> schemas) =>

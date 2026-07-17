@@ -3,7 +3,7 @@ import 'package:flod/src/rules/numbers/base_number_rule.dart';
 class MinValueRule<T extends num> extends BaseNumberRule<T> {
   final num min;
 
-  const MinValueRule(this.min, {required super.code});
+  const MinValueRule(this.min, {required super.code, super.message});
 
   @override
   bool check(num value) => value >= min;

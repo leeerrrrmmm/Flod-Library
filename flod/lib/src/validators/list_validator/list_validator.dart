@@ -8,6 +8,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
   final Validator<T>? schema;
   final int? minItemsLength;
   final int? maxItemsLength;
+  final String? minMessage;
+  final String? maxMessage;
   final bool isUnique;
 
   @override
@@ -17,6 +19,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     this.schema,
     this.minItemsLength,
     this.maxItemsLength,
+    this.minMessage,
+    this.maxMessage,
     this.isUnique = false,
     this.transformers = const [],
     super.isSecret = false,
@@ -38,6 +42,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     Validator<T>? schema,
     int? minItemsLength,
     int? maxItemsLength,
+    String? minMessage,
+    String? maxMessage,
     bool? isUnique,
     List<Transformer<List<T>>>? transformers,
     bool? isSecret,
@@ -45,6 +51,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     final nextSchema = schema ?? this.schema;
     final nextMin = minItemsLength ?? this.minItemsLength;
     final nextMax = maxItemsLength ?? this.maxItemsLength;
+    final nextMinMsg = minMessage ?? this.minMessage;
+    final nextMaxMsg = maxMessage ?? this.maxMessage;
     final nextUnique = isUnique ?? this.isUnique;
     final nextTransformers = transformers ?? this.transformers;
     final nextSecret = isSecret ?? this.isSecret;
@@ -52,6 +60,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
       unchanged: identical(nextSchema, this.schema) &&
           nextMin == this.minItemsLength &&
           nextMax == this.maxItemsLength &&
+          nextMinMsg == this.minMessage &&
+          nextMaxMsg == this.maxMessage &&
           nextUnique == this.isUnique &&
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret,
@@ -60,6 +70,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
         schema: nextSchema,
         minItemsLength: nextMin,
         maxItemsLength: nextMax,
+        minMessage: nextMinMsg,
+        maxMessage: nextMaxMsg,
         isUnique: nextUnique,
         transformers: nextTransformers,
         isSecret: nextSecret,
@@ -67,9 +79,11 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     );
   }
 
-  ListValidator<T> min(int n) => copyWith(minItemsLength: n);
+  ListValidator<T> min(int n, {String? message}) =>
+      copyWith(minItemsLength: n, minMessage: message);
 
-  ListValidator<T> max(int n) => copyWith(maxItemsLength: n);
+  ListValidator<T> max(int n, {String? message}) =>
+      copyWith(maxItemsLength: n, maxMessage: message);
 
   /// Deprecated — use [min].
   @Deprecated('Use min() instead.')
@@ -163,6 +177,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
           path: path,
           code: FlodErrorCodes.listMinItems,
           params: {'limit': minItemsLength},
+          message: minMessage,
           value: baseList,
           isSecret: isSecret,
         ),
@@ -175,6 +190,7 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
           path: path,
           code: FlodErrorCodes.listMaxItems,
           params: {'limit': maxItemsLength},
+          message: maxMessage,
           value: baseList,
           isSecret: isSecret,
         ),

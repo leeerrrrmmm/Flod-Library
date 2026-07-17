@@ -7,8 +7,8 @@
 **Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.
 If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod will feel immediately familiar — with the extras that matter in production: **PII-safe errors**, **JSON hardening**, **Dio middleware**, **Flutter form bridging**, and a **compiled performance layer**.
 
-[![pub package](https://img.shields.io/badge/pub-v1.0.3-blue)](https://pub.dev)
-[![tests](https://img.shields.io/badge/tests-79%2B%20passing-brightgreen)]()
+[![pub package](https://img.shields.io/badge/pub-v1.1.0-blue)](https://pub.dev)
+[![tests](https://img.shields.io/badge/tests-95%2B%20passing-brightgreen)]()
 [![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
 
 ---
@@ -20,10 +20,13 @@ If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod w
 - [Quick start](#quick-start)
 - [Parse API — safeParse vs parse](#parse-api--safeparse-vs-parse)
 - [Schema building blocks](#schema-building-blocks)
+- [Coercion — `Flod.coerce.*`](#coercion--flodcoerce)
 - [Transform pipeline](#transform-pipeline)
 - [Objects, lists & unions](#objects-lists--unions)
+- [Recursive schemas — `Flod.lazy`](#recursive-schemas--flodlazy)
 - [Defaults, nullable & optional](#defaults-nullable--optional)
 - [Cross-field validation — refine & superRefine](#cross-field-validation--refine--superrefine)
+- [Inline error messages — `message:`](#inline-error-messages--message)
 - [Schema composition — Zod-style object helpers](#schema-composition--zod-style-object-helpers)
 - [Security & privacy — `.secret()`](#security--privacy--secret)
 - [Developer experience — readable errors](#developer-experience--readable-errors)
@@ -55,6 +58,9 @@ Flod fills the gap that **Zod** solved on the frontend — but natively for Dart
 | JSON attack-surface guard (depth, `__proto__`) | ❌ | ❌ | ✅ |
 | Dio response-validation middleware | ❌ | ❌ | ✅ |
 | Flutter form field error maps | ❌ | ❌ | ✅ |
+| `Flod.coerce.*` (string → int/double/bool) | manual | ❌ | ✅ |
+| `Flod.lazy()` recursive schemas | ❌ | ❌ | ✅ |
+| Inline `message:` on rules (no i18n setup) | ❌ | ❌ | ✅ |
 | Compiled hot path (`schema.compile()`) | ❌ | ❌ | ✅ |
 | `build_runner` typed codegen | — | ✅ | 🔜 [see roadmap](#whats-coming) |
 
@@ -73,19 +79,19 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flod: ^1.0.3
+  flod: ^1.1.0
 ```
 
 **Entry points**
 
 | Import | Purpose |
 |---|---|
-| `package:flod/flod.dart` | Core validators, `Flod.*` factories, `safeParse` / `parse` (sync + async), **`ValidationException`**, **`FlodDefaultLocale`**, `FlodConfig`, i18n codes & resolvers |
-| `package:flod/dio.dart` | `FlodValidateInterceptor` **and** a full re-export of `package:dio/dio.dart` (`Dio`, `DioException`, …) — one import is enough |
+| `package:flod/flod.dart` | Core validators, `Flod.*` / `Flod.coerce` / `Flod.lazy`, `safeParse` / `parse`, **`ValidationException`**, **`FlodDefaultLocale`**, `FlodConfig`, i18n |
+| `package:flod/dio.dart` | `FlodValidateInterceptor` **and** a full re-export of `package:dio/dio.dart` (`Dio`, `DioException`, …) — prefer this over importing `dio` directly (no extra `dio:` line needed in your app pubspec) |
 | `package:flod/guard.dart` | `JsonGuard` / `JsonGuardOptions` — JSON security layer |
 | `package:flod/form.dart` | `FlodFormAdapter` — pure Dart, Flutter-ready |
 
-> **v1.0.3:** `ValidationException` and `FlodDefaultLocale` are public exports. Prefer these over any `package:flod/src/...` import (private paths are not part of the supported API).
+> **v1.1.0:** `Flod.coerce.*`, `Flod.lazy()`, inline `message:`, safe `withDefault` / `withDefaultFactory`. Prefer public exports over any `package:flod/src/...` import.
 ---
 
 ## Quick start
@@ -205,6 +211,44 @@ Flod.int().multipleOf(7)
 Flod.double().nonNegative()
 ```
 
+> **Length units:** `string().min` / `.max` / `.length` use Dart `String.length` (**UTF-16 code units**), not grapheme clusters. A single emoji like `👨‍👩‍👧‍👦` may be longer than `10`.
+
+---
+
+## Coercion — `Flod.coerce.*`
+
+Zod `z.coerce.*` for Dart. Coercion runs **before** type checks and rule chains, so the **same schema** can validate typed JSON **and** Flutter form strings.
+
+```dart
+final formSchema = Flod.object({
+  'age': Flod.coerce.int().min(18, message: 'Must be 18+'),
+  'price': Flod.coerce.double().nonNegative(),
+  'active': Flod.coerce.boolean(),
+  'note': Flod.coerce.string().max(200),
+});
+
+// TextFormField / JSON-with-strings:
+formSchema.safeParse({
+  'age': '22',       // → 22
+  'price': '9.99',   // → 9.99
+  'active': 'yes',   // → true
+  'note': 42,        // → "42"
+});
+```
+
+| API | Accepts (in addition to the native type) |
+|---|---|
+| `Flod.coerce.int()` | numeric `String` (`"42"`), other `num`, `bool` (`true`→1 / `false`→0) |
+| `Flod.coerce.double()` | numeric `String`, `int`/`num`, `bool` |
+| `Flod.coerce.boolean()` | `"true"`/`"false"`/`"1"`/`"0"`/`"yes"`/`"no"`/`"on"`/`"off"` (case-insensitive), `0`/`1` |
+| `Flod.coerce.string()` | any non-null value via `Object.toString()` |
+
+**Important**
+
+- Use `Flod.coerce.int()` when input may be a `String`. Plain `Flod.int()` still **rejects** `"42"` (strict typed API / JSON that already decoded numbers).
+- Failed coercion → `invalid_type` (same as a normal type mismatch).
+- Chain rules as usual: `Flod.coerce.int().min(0).max(120).positive()`.
+
 ---
 
 ## Transform pipeline
@@ -250,16 +294,64 @@ final eventSchema = Flod.union([
 
 ---
 
+## Recursive schemas — `Flod.lazy`
+
+Deferred schema construction (Zod `.lazy()`). Required for trees / mutually recursive types.
+
+```dart
+late final Validator<Map<String, dynamic>> category;
+
+category = Flod.object({
+  'name': Flod.string().min(1),
+  'children': Flod.list(schema: Flod.lazy(() => category)),
+});
+
+category.safeParse({
+  'name': 'root',
+  'children': [
+    {'name': 'child', 'children': []},
+  ],
+});
+```
+
+**Contract (exact)**
+
+| Behavior | Detail |
+|---|---|
+| When factory runs | On first `validate` / `safeParse` (result is **cached**) |
+| `compile()` | Leaves `LazyValidator` in place (does **not** expand) so recursive graphs do not stack-overflow |
+| Async | `LazyValidator` implements `AsyncValidator` and forwards to an async inner when present |
+| Secret | `Flod.lazy(() => schema).secret()` / parent `.secret()` still mask as usual |
+
+Use `late final` + a closure that captures the same variable (pattern above).
+
+---
+
 ## Defaults, nullable & optional
 
 | Modifier | Meaning |
 |---|---|
 | `.nullable()` | Key present, value may be `null` |
 | `.optional()` | Key may be absent from the object |
-| `.withDefault(value)` | Zod `.default()` — Dart keyword-safe name |
+| `.withDefault(value)` | When input is missing/`null` → default (Zod `.default()`) |
+| `.withDefaultFactory(() => value)` | Same, but **factory runs every time** (safe for nested mutables) |
 
 ```dart
-Flod.int().nonNegative().withDefault(0)  // missing key → 0
+Flod.int().nonNegative().withDefault(0)  // missing/`null` → 0
+```
+
+### Mutable defaults (lists / maps) — do this
+
+`withDefault([])` / `withDefault({})` used to share one instance across parses (silent corruption if you mutate the result). **Fixed in v1.1.0:**
+
+- `List` / `Map<String, dynamic>` passed to `withDefault` are **shallow-cloned** on every use.
+- For nested mutables, prefer an explicit factory:
+
+```dart
+Flod.list(schema: Flod.string()).withDefaultFactory(() => <String>[]);
+
+Flod.object({'tags': Flod.list(schema: Flod.string())})
+    .withDefaultFactory(() => {'tags': <String>[]});
 ```
 
 > Legacy aliases `defaultValue()`, `minItems`/`maxItems`, `fixedLength()` are deprecated — use `withDefault()`, `min()`/`max()`, `length()`.
@@ -268,7 +360,9 @@ Flod.int().nonNegative().withDefault(0)  // missing key → 0
 
 ## Cross-field validation — refine & superRefine
 
-**Simple predicate** (Zod `.refine()`):
+`.refine()` / `.superRefine()` work on **any** `Validator` — objects **and** leaf primitives (`Flod.string()`, `Flod.int()`, …).
+
+**Object / cross-field** (Zod `.refine()`):
 
 ```dart
 final signupSchema = Flod.object({
@@ -278,6 +372,16 @@ final signupSchema = Flod.object({
   (data) => data['password'] == data['confirmPassword'],
   code: 'passwords_match',
   path: ['confirmPassword'], // error attaches here
+  message: 'Passwords do not match', // optional inline copy
+);
+```
+
+**Leaf-level** (custom primitive rule):
+
+```dart
+Flod.string().email().refine(
+  (email) => !email.endsWith('@tempmail.com'),
+  message: 'Disposable emails are not allowed',
 );
 ```
 
@@ -286,12 +390,35 @@ final signupSchema = Flod.object({
 ```dart
 schema.superRefine((value, ctx) {
   if (value['age'] < 18 && value['country'] == 'US') {
-    ctx.addIssue(code: 'too_young', path: ['age']);
+    ctx.addIssue(code: 'too_young', path: ['age'], message: 'Too young for US');
   }
 });
 ```
 
 **Async** — use `.refineAsync()` / `.superRefineAsync()` with `safeParseAsync()`.
+
+**Chained `.refine().refine()` note:** nested refine wrappers short-circuit — if an inner refine fails, outer refine predicates do **not** run. To collect several cross-field issues in one pass, use **one** `.superRefine()` with multiple `ctx.addIssue(...)`.
+
+---
+
+## Inline error messages — `message:`
+
+Production apps should keep using `code` + `FlodConfig` / locale compiler. For prototypes and one-off UI copy, pass `message:` on rules — it **overrides** the i18n resolver for that error only.
+
+```dart
+Flod.string().min(8, message: 'Password too short');
+Flod.int().min(18, message: 'Must be 18+');
+Flod.list(schema: Flod.int()).min(1, message: 'Add at least one item');
+
+Flod.string().email(message: 'Enter a valid email');
+```
+
+**Resolution order** (exact):
+
+1. If `FlodError.message != null` → that string is returned by `getMessages()` / `toReadable()` / `getFieldsMap()`.
+2. Else → `FlodI18nResolver` / `localeCompiler(code, params)`.
+
+`code` is still stored on the error (analytics, logging, later i18n). Inline `message` does **not** remove the code.
 
 ---
 
@@ -313,7 +440,7 @@ Reuse primitives via **SchemaPool** — `Flod.string()` returns shared singleton
 
 One of Flod's strongest differentiators vs other Dart validators and vs naive Zod usage in logging pipelines.
 
-Mark any validator (or a whole object) as **secret** — failed values and debug traces show `[HIDDEN]` instead of raw PII:
+Mark any validator (or a whole object) as **secret** — failed values are masked as `[HIDDEN]` on the structured error object (and in debug traces), instead of leaking raw PII:
 
 ```dart
 final loginSchema = Flod.object({
@@ -326,30 +453,41 @@ final loginSchema = Flod.object({
 final secureSchema = loginSchema.secret();
 ```
 
-### Example: public vs secret error output
+### Where `[HIDDEN]` appears
+
+| Surface | Behavior |
+|---|---|
+| `FlodError.value` / `FlodError.toString()` / `toMap()` | `[HIDDEN]` when `isSecret: true` |
+| `FlodDebug.trace()` | value shown as `[HIDDEN]` when the validator is secret |
+| `toReadable()` / `getFieldsMap()` / `getMessages()` | **human messages only** — never embed the raw failed value (secret or not) |
+
+So masking is checked on the error object, not by grepping `toReadable()` for the string `HIDDEN`:
+
+```dart
+final failure = loginSchema.safeParse(badInput) as FlodFailure;
+failure.errors.any((e) => e.isSecret && e.value == '[HIDDEN]'); // true for password/pan
+```
+
+### Example: public vs secret on `FlodError.value`
 
 **Input:** `{'email': 'bad', 'password': '123'}`
 
-**Public validator** (values visible — OK for non-sensitive fields):
+**Public field** (`password` without `.secret()`):
 
 ```
-❌ PUBLIC FAIL → 2 error(s)
-   ↳ Path: 'email'       | Code: string_email | Value: bad
-   ↳ Path: 'password'    | Code: string_min   | Value: 123
+FlodError(path: 'password', code: string_min, ..., value: 123)
 ```
 
-**Secret validator** (same schema + `.secret()` on password):
+**Secret field** (same rule + `.secret()`):
 
 ```
-🔒 SECRET FAIL → 2 error(s)
-   ↳ Path: 'email'       | Code: string_email | Value: bad
-   ↳ Path: 'password'    | Code: string_min   | Masked Value: [HIDDEN]
+FlodError(path: 'password', code: string_min, ..., value: [HIDDEN])
 ```
 
 No accidental password/token/card leaks in:
 
-- `FlodError.value`
-- `ValidationException` messages
+- `FlodError.value` (returns `[HIDDEN]` when secret)
+- `FlodError.toString()` / `toMap()`
 - `FlodDebug.trace()` when `isSecret: true`
 
 **Use `.secret()` on:** passwords, refresh tokens, API keys, PAN, CVV, SSN, recovery codes.
@@ -360,7 +498,7 @@ No accidental password/token/card leaks in:
 
 Every error carries:
 
-- **`path`** — `FlodPath` with `.toReadable()` → `profile.tags.0`
+- **`path`** — `FlodPath` with `.toReadable()` → object keys dotted, list indices in brackets: `profile.tags[0]`, `items[1].qty`
 - **`code`** — stable machine id (`FlodErrorCodes.*`) for i18n
 - **`params`** — interpolation payload for translators
 
@@ -397,9 +535,9 @@ Flod.object({'user': Flod.object({'age': Flod.int().min(18)})})
 
 ```
    ❌ PUBLIC FAIL → 3 error(s)
-         ↳ Path: 'profile.displayName' | Code: string_min | Value: A
-         ↳ Path: 'items.1.qty'         | Code: number_positive | Value: -1
-         ↳ Path: 'email'               | Code: string_email | Value: not-an-email
+         ↳ Path: 'profile.displayName' | Code: string_min      | Value: A
+         ↳ Path: 'items[1].qty'        | Code: number_positive | Value: -1
+         ↳ Path: 'email'               | Code: string_email    | Value: not-an-email
 ```
 
 Wire into Flutter:
@@ -462,25 +600,33 @@ Blocks: prototype pollution keys, excessive depth/key budget, oversized strings/
 
 ### FlodValidateInterceptor — Dio middleware
 
-`package:flod/dio.dart` re-exports Dio (v1.0.3+), so you do **not** need a separate `import 'package:dio/dio.dart'` for `Dio` / `DioException`:
+**Do not** add a separate `import 'package:dio/dio.dart'` just to use Flod's interceptor.
+`package:flod/dio.dart` already re-exports Dio (`Dio`, `DioException`, …). That also avoids the
+`depend_on_referenced_packages` analyzer warning that appears when an app imports `dio` directly
+without declaring it in its own `pubspec.yaml`.
+
+You only need `flod` in your `pubspec.yaml` — `dio` is pulled in transitively by Flod.
+Declare `dio` yourself only if your app uses Dio outside of Flod and you want a direct dependency.
 
 ```dart
-import 'package:flod/dio.dart';
+import 'package:flod/dio.dart' as flod_dio;
 import 'package:flod/flod.dart'; // ValidationException
 import 'package:flod/guard.dart';
 
-final dio = Dio();
+final dio = flod_dio.Dio();
 
-dio.interceptors.add(FlodValidateInterceptor(
-  schema: postSchema,
-  guard: guard, // optional — security first, then schema
-  extractData: (r) => (r.data as Map)['data'], // unwrap `{ data: ... }` envelopes
-));
+dio.interceptors.add(
+  flod_dio.FlodValidateInterceptor(
+    schema: postSchema,
+    guard: guard, // optional — security first, then schema
+    extractData: (r) => (r.data as Map)['data'], // unwrap `{ data: ... }` envelopes
+  ),
+);
 
 try {
   final response = await dio.get('/posts/1');
   // response.data is already validated (+ transformed) output
-} on DioException catch (e) {
+} on flod_dio.DioException catch (e) {
   if (e.error is ValidationException) {
     final ve = e.error as ValidationException;
     print(ve.errors); // FlodError list with paths & codes
@@ -491,16 +637,17 @@ try {
 ```
 
 On success: replaces `response.data` with validated, typed output.
-On failure: rejects with `DioException` whose `error` is a `ValidationException`.
+On failure (interceptor path): rejects with `DioException` whose `error` is a `ValidationException`.
 
-Standalone helper (no Dio instance needed):
+Standalone helper (no live HTTP) — returns `ParseResult`, **does not throw**:
 
 ```dart
-FlodValidateInterceptor.validatePayload(
+final result = flod_dio.FlodValidateInterceptor.validatePayload(
   raw: jsonMap,
   schema: schema,
   guard: guard,
 );
+// result is FlodSuccess or FlodFailure
 ```
 ### FlodFormAdapter — form bridge
 
@@ -598,26 +745,31 @@ Trace format:
 
 ## Project status
 
-Flod v1.0 is feature-complete against its original design goals. All core engine, DX, security, performance, and integration layers described in this document are implemented and covered by the test suite:
+Flod **v1.1** adds the form/API “first week” gaps (coerce, lazy, inline messages, safe defaults) on top of the v1.0 engine:
 
 - ✅ Core parsing (`safeParse` / `parse`, sync & async, optional `abortEarly`)
 - ✅ Public `ValidationException` + `FlodDefaultLocale` on the main export
 - ✅ Full primitive + string-format validator suite (`email`, `url`, `uuid`, `phone`, `credit card/Luhn`, `CVV`, `regex`)
-- ✅ Transform pipeline, `nullable`/`optional`/`default handling`
-- ✅ Objects (`strict`/`passthrough`), nested paths, lists, unions & discriminated unions
-- ✅ Cross-field validation (`refine`, `superRefine`, `async variants`)
+- ✅ **`Flod.coerce.int/double/boolean/string`** — stringly form/JSON → typed values
+- ✅ **`Flod.lazy(() => schema)`** — recursive / mutually recursive schemas
+- ✅ **Inline `message:`** on rules + refine (bypasses i18n when set)
+- ✅ **`withDefault` / `withDefaultFactory`** — mutable defaults no longer shared across parses
+- ✅ Transform pipeline, `nullable`/`optional`
+- ✅ Objects (`strict`/`passthrough`), nested paths (`items[1].qty`), lists, unions & discriminated unions
+- ✅ Cross-field **and leaf** validation (`refine`, `superRefine`, async variants)
 - ✅ Schema composition (`extend`, `merge`, `partial`, `pick`, `omit`)
 - ✅ `.secret()` PII masking across errors and debug traces
 - ✅ `i18n resolver` + `debug tracing`
 - ✅ Performance layer — `SchemaPool`, `ChainOptimization`, `ValidatorCompiler`
 - ✅ Integrations — `JsonGuard`, `FlodValidateInterceptor` (Dio re-export), `FlodFormAdapter`
+
 The only major item intentionally deferred is **typed static codegen** (`build_runner`) — see below.
 
 ---
 
 ## What's coming
 
-The chain API stays exactly as it is today (`Flod.string().isIp().secret()`) — new capability is additive, with i18n codes and `compile()` support from day one.
+New APIs stay additive (`Flod.coerce.*`, `Flod.lazy`, `message:`) — existing call sites keep compiling.
 
 ### Confirmed roadmap
 
@@ -629,13 +781,11 @@ The chain API stays exactly as it is today (`Flod.string().isIp().secret()`) —
 
 ### Proposed additions (under evaluation)
 
-These aren't committed yet, but each targets a gap that's specific to what makes Flod different from plain Zod-porting — the API/Dio/Flutter surface — rather than duplicating format validators already on the confirmed list.
-
-- **`.toJsonSchema()` / `.toOpenApiSchema()`** — export any Flod schema as JSON Schema / OpenAPI. Since Flod already sits at the Dio boundary, this closes the loop: the same schema that validates a response can generate the API contract documentation, instead of maintaining both by hand.
-- **`.lazy(() => schema)`** — deferred schema resolution for recursive structures (comment trees, nested category trees, org charts). This is a known Zod pattern that has no equivalent yet in Flod's object/union model.
-- **`schema.generateSample()`** — produce realistic fixture/mock data straight from a schema (respecting `min`/`max`/`email`/`uuid`/etc.), for unit tests and Flutter widget previews without hand-writing fixtures that drift from the real schema.
-- **Isolate-aware `compile(parallel: true)`** — for the 1 MB+ payload case already covered in the benchmarks, offload compiled list validation to a Dart isolate so large API responses don't block the UI thread in Flutter.
-- **`CompiledListValidator` completion** — the compiler currently returns an optimized `ListValidator` rather than a dedicated `CompiledListValidator`; closing this gap would make the compiled path fully consistent between objects and lists.
+- **`.toJsonSchema()` / `.toOpenApiSchema()`** — export any Flod schema as JSON Schema / OpenAPI.
+- **`Flod.record` / `Flod.enum_` / `.catch()` / `.describe()`** — open maps, Dart enum sugar, soft fallbacks, schema metadata.
+- **`schema.generateSample()`** — fixture data from a schema.
+- **Isolate-aware `compile(parallel: true)`** — niche 1 MB+ Flutter UI-thread offload.
+- **`CompiledListValidator` completion** — internal compiler consistency for lists.
 
 Track progress in [CHANGELOG](CHANGELOG.md).
 
@@ -646,7 +796,7 @@ Track progress in [CHANGELOG](CHANGELOG.md).
 ```bash
 cd flod
 dart pub get
-dart test                            # 79+ tests — core, integrations, performance layer
+dart test                            # 95+ tests — core, integrations, performance, v1.1 features
 dart run example/flod_example.dart   # quick start & privacy demos
 dart run example/high_ex.dart        # full stress & privacy matrix
 ```

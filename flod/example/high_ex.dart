@@ -422,20 +422,20 @@ void main() async {
   );
 
   // =========================================================================
-  // SECTION 7: DEFAULT VALUES
+  // SECTION 7: DEFAULT VALUES (withDefault / withDefaultFactory)
   // =========================================================================
   print("=== SECTION 7: DEFAULT VALUES ===");
 
   runScenario(
-    name: "7.1. Basic Default Value (Deep Map Omission)",
+    name: "7.1. withDefault (Deep Map Omission)",
     publicValidator: Flod.object({
       "config": Flod.object({
-        "theme": Flod.string().defaultValue("dark"),
+        "theme": Flod.string().withDefault("dark"),
       }).optional(),
     }),
     secretValidator: Flod.object({
       "config": Flod.object({
-        "theme": Flod.string().defaultValue("dark"),
+        "theme": Flod.string().withDefault("dark"),
       }).optional(),
     }).secret(),
     validValue: {"config": {}},
@@ -445,17 +445,54 @@ void main() async {
   );
 
   runScenario(
-    name: "7.2. Default + Complex Chained Pipeline (Calculation Injection)",
+    name: "7.2. withDefault + Complex Chained Pipeline (Calculation Injection)",
     publicValidator: Flod.object({
-      "port": Flod.int().defaultValue(80).transform((v) => v + 4000),
+      "port": Flod.int().withDefault(80).transform((v) => v + 4000),
     }),
     secretValidator: Flod.object({
-      "port": Flod.int().defaultValue(80).transform((v) => v + 4000),
+      "port": Flod.int().withDefault(80).transform((v) => v + 4000),
     }).secret(),
     validValue:
         {}, // Key missing -> default (80) should apply -> transform to 4080
     invalidValue: {"port": "NaN-Malicious-String-Attack"},
   );
+
+  // Mutable defaults: list/map are cloned; factory preferred for nested mutables.
+  final listDefault = Flod.list(schema: Flod.string()).withDefault(<String>[]);
+  final listA =
+      (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
+  listA.add("mutated");
+  final listB =
+      (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
+  print("📌 [Validator: 7.3. withDefault([]) clone safety]");
+  if (listB.isEmpty && !identical(listA, listB)) {
+    print(
+      "   ✅ SUCCESS -> list defaults are cloned | a=$listA b=$listB",
+    );
+  } else {
+    print("   🚨 CRITICAL FAIL -> mutable default was shared across parses!");
+  }
+
+  final factoryDefault = Flod.object({
+    "tags": Flod.list(schema: Flod.string()),
+  }).withDefaultFactory(() => {"tags": <String>[]});
+  final mapA =
+      (factoryDefault.safeParse(null) as FlodSuccess<Map<String, dynamic>>)
+          .data;
+  (mapA["tags"] as List).add("x");
+  final mapB =
+      (factoryDefault.safeParse(null) as FlodSuccess<Map<String, dynamic>>)
+          .data;
+  print("📌 [Validator: 7.4. withDefaultFactory nested mutables]");
+  if ((mapB["tags"] as List).isEmpty) {
+    print(
+      "   ✅ SUCCESS -> factory produced fresh nested list | "
+      "a=${mapA['tags']} b=${mapB['tags']}",
+    );
+  } else {
+    print("   🚨 CRITICAL FAIL -> factory default was shared!");
+  }
+  print("");
 
   // =========================================================================
   // SECTION 8: ABORT EARLY & COMPLEX NESTING (STRESS TRIAL)
@@ -512,6 +549,112 @@ void main() async {
       "system_flags": "not_even_a_map_structure",
     },
   );
+
+  // =========================================================================
+  // SECTION 9: v1.1.0 — COERCE / LAZY / INLINE message:
+  // =========================================================================
+  print("=== SECTION 9: v1.1.0 COERCE / LAZY / INLINE message: ===");
+
+  runScenario(
+    name: "9.1. Flod.coerce.* form-shaped object (stringly JSON)",
+    publicValidator: Flod.object({
+      "age": Flod.coerce.int().min(18, message: "Must be 18+"),
+      "price": Flod.coerce.double().nonNegative(),
+      "active": Flod.coerce.boolean(),
+      "note": Flod.coerce.string().max(200),
+    }),
+    secretValidator: Flod.object({
+      "age": Flod.coerce.int().min(18, message: "Must be 18+"),
+      "price": Flod.coerce.double().nonNegative(),
+      "active": Flod.coerce.boolean(),
+      "note": Flod.coerce.string().max(200),
+    }).secret(),
+    validValue: {
+      "age": "22",
+      "price": "9.99",
+      "active": "yes",
+      "note": 42,
+    },
+    invalidValue: {
+      "age": "12",
+      "price": "not-a-number",
+      "active": "maybe",
+      "note": "ok",
+    },
+  );
+
+  runScenario(
+    name: "9.2. Strict Flod.int() still rejects String (no coerce)",
+    publicValidator: Flod.int().positive(),
+    secretValidator: Flod.int().positive().secret(),
+    validValue: 42,
+    invalidValue: "42",
+  );
+
+  late final Validator<Map<String, dynamic>> categoryTree;
+  categoryTree = Flod.object({
+    "name": Flod.string().min(1, message: "Name required"),
+    "children": Flod.list(schema: Flod.lazy(() => categoryTree)),
+  });
+
+  runScenario(
+    name: "9.3. Flod.lazy() recursive category tree",
+    publicValidator: categoryTree,
+    secretValidator: categoryTree.secret(),
+    validValue: {
+      "name": "root",
+      "children": [
+        {
+          "name": "child",
+          "children": [
+            {"name": "leaf", "children": <dynamic>[]},
+          ],
+        },
+      ],
+    },
+    invalidValue: {
+      "name": "root",
+      "children": [
+        {"name": "", "children": <dynamic>[]},
+      ],
+    },
+  );
+
+  // compile() must not expand lazy (no stack overflow).
+  final compiledLazy = categoryTree.compile();
+  final compiledLazyOk = compiledLazy.safeParse({
+    "name": "compiled",
+    "children": <dynamic>[],
+  });
+  print("📌 [Validator: 9.4. compile() leaves LazyValidator intact]");
+  if (compiledLazyOk is FlodSuccess) {
+    print("   ✅ SUCCESS -> compiled recursive schema parses without overflow");
+  } else {
+    print("   🚨 CRITICAL FAIL -> compiled lazy schema failed unexpectedly");
+  }
+
+  final inlineMsg = Flod.string().min(8, message: "Password too short");
+  final inlineFail = inlineMsg.safeParse("123") as FlodFailure<String>;
+  final leafRefine = Flod.string().email().refine(
+    (v) => !v.endsWith("@tempmail.com"),
+    message: "Disposable emails are not allowed",
+  );
+  final refineFail =
+      leafRefine.safeParse("a@tempmail.com") as FlodFailure<String>;
+  print("📌 [Validator: 9.5. Inline message: on rules & leaf refine]");
+  final msgOk =
+      inlineFail.getMessages().single == "Password too short" &&
+      refineFail.getMessages().single == "Disposable emails are not allowed" &&
+      refineFail.errors.single.code != null;
+  if (msgOk) {
+    print(
+      "   ✅ SUCCESS -> messages=${inlineFail.getMessages()} / "
+      "${refineFail.getMessages()} | code=${refineFail.errors.single.code}",
+    );
+  } else {
+    print("   🚨 CRITICAL FAIL -> inline message resolution broken");
+  }
+  print("");
 
   // =========================================================================
   // SECTION 19: NUMBER VALIDATOR SUITE
@@ -1301,6 +1444,51 @@ void main() async {
     'ULT-24 SchemaPool singleton identity',
     identical(SchemaPool.string, Flod.string()) &&
         identical(SchemaPool.int, Flod.int()),
+  );
+
+  // --- v1.1.0 coerce / lazy / message / defaults ---
+  final coerceForm = Flod.object({
+    'age': Flod.coerce.int().min(18),
+    'active': Flod.coerce.boolean(),
+  });
+  final coerceOk = coerceForm.safeParse({'age': '22', 'active': 'yes'});
+  ultimateCheck(
+    'ULT-25 Flod.coerce form strings → typed values',
+    coerceOk is FlodSuccess<Map<String, dynamic>> &&
+        (coerceOk as FlodSuccess<Map<String, dynamic>>).data['age'] == 22 &&
+        coerceOk.data['active'] == true,
+  );
+
+  late final Validator<Map<String, dynamic>> lazyNode;
+  lazyNode = Flod.object({
+    'v': Flod.int(),
+    'next': Flod.lazy(() => lazyNode).optional(),
+  });
+  final lazyCompiled = lazyNode.compile().safeParse({
+    'v': 1,
+    'next': {'v': 2},
+  });
+  ultimateCheck(
+    'ULT-26 Flod.lazy + compile recursive parse',
+    lazyCompiled is FlodSuccess,
+  );
+
+  final msgFail =
+      Flod.string().min(5, message: 'Too short').safeParse('hi')
+          as FlodFailure<String>;
+  ultimateCheck(
+    'ULT-27 inline message: overrides locale',
+    msgFail.getMessages().single == 'Too short' &&
+        msgFail.errors.single.code == FlodErrorCodes.stringMin,
+  );
+
+  final sharedList = Flod.list(schema: Flod.int()).withDefault(<int>[]);
+  final d1 = (sharedList.safeParse(null) as FlodSuccess<List<int>>).data;
+  d1.add(1);
+  final d2 = (sharedList.safeParse(null) as FlodSuccess<List<int>>).data;
+  ultimateCheck(
+    'ULT-28 withDefault([]) clone safety',
+    d2.isEmpty && !identical(d1, d2),
   );
 
   print('');

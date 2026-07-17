@@ -8,6 +8,7 @@ class CustomStringRule extends BaseStringRule {
   const CustomStringRule(
     this.predicate, {
     required super.code,
+    super.message,
     this.metaParams,
   });
 

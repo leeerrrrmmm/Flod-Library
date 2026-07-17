@@ -7,6 +7,7 @@ class CustomNumberRule<T extends num> extends BaseNumberRule<T> {
   const CustomNumberRule(
     this.predicate, {
     required super.code,
+    super.message,
     this.metaParams,
   });
 

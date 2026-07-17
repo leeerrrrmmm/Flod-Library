@@ -77,6 +77,10 @@ final class ValidatorCompiler {
     if (validator is UnionValidator<T>) {
       return _compileUnion(validator);
     }
+    if (validator is LazyValidator<T>) {
+      // Keep lazy wrappers — resolving would infinite-loop on recursive schemas.
+      return validator;
+    }
 
     return validator;
   }
@@ -135,7 +139,7 @@ final class ValidatorCompiler {
   DefaultDecorator<T> _compileDefault<T>(DefaultDecorator<T> source) {
     return DefaultDecorator<T>(
       compile(source.inner),
-      source.defaultValue,
+      source.factory,
       transformers: source.transformers,
       isSecret: source.isSecret,
     );
@@ -148,6 +152,7 @@ final class ValidatorCompiler {
       source.customPath,
       source.errorCode,
       source.errorParams,
+      message: source.errorMessage,
       isSecret: source.isSecret,
     );
   }
@@ -171,6 +176,7 @@ final class ValidatorCompiler {
       source.customPath,
       source.errorCode,
       source.errorParams,
+      message: source.errorMessage,
       isSecret: source.isSecret,
     );
   }

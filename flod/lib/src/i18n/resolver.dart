@@ -12,7 +12,11 @@ class FlodI18nResolver {
     : _compiler = compiler ?? FlodDefaultLocale.compile;
 
   /// Resolves a [FlodError] into a user-facing message.
+  ///
+  /// Priority: inline [FlodError.message] (if set) → locale [compiler].
   String translate(FlodError error) {
+    final inline = error.message;
+    if (inline != null) return inline;
     return _compiler(error.code, error.params);
   }
 }

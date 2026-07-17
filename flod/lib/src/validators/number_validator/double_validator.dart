@@ -54,20 +54,20 @@ class DoubleValidator extends BaseNumberValidator<double>
   }
 
   @override
-  DoubleValidator positive({String? code}) =>
-      super.positive(code: code) as DoubleValidator;
+  DoubleValidator positive({String? code, String? message}) =>
+      super.positive(code: code, message: message) as DoubleValidator;
 
   @override
-  DoubleValidator nonPositive({String? code}) =>
-      super.nonPositive(code: code) as DoubleValidator;
+  DoubleValidator nonPositive({String? code, String? message}) =>
+      super.nonPositive(code: code, message: message) as DoubleValidator;
 
   @override
-  DoubleValidator negative({String? code}) =>
-      super.negative(code: code) as DoubleValidator;
+  DoubleValidator negative({String? code, String? message}) =>
+      super.negative(code: code, message: message) as DoubleValidator;
 
   @override
-  DoubleValidator nonNegative({String? code}) =>
-      super.nonNegative(code: code) as DoubleValidator;
+  DoubleValidator nonNegative({String? code, String? message}) =>
+      super.nonNegative(code: code, message: message) as DoubleValidator;
 
   // =========================================================================
   // VALIDATION CORE
@@ -140,6 +140,7 @@ class DoubleValidator extends BaseNumberValidator<double>
             path: path,
             code: rule.code,
             params: rule.params,
+            message: rule.message,
             value: isSecret ? null : transformed,
             isSecret: isSecret,
           ),

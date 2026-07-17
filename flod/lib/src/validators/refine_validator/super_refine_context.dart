@@ -18,6 +18,7 @@ final class SuperRefineContext {
   void addIssue({
     List<String>? path,
     required String code,
+    String? message,
     Map<String, dynamic>? params,
   }) {
     final targetPath = path != null
@@ -29,6 +30,7 @@ final class SuperRefineContext {
         path: targetPath,
         code: code,
         params: {'value': isSecret ? null : value, ...?params},
+        message: message,
         value: isSecret ? null : value,
         isSecret: isSecret,
       ),
