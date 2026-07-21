@@ -1,3 +1,9 @@
+## 1.1.2
+
+### Pub
+
+- Add package `topics` (`validation`, `forms`, `json`, `dio`, `schema`) for better discoverability on pub.dev.
+
 ## 1.1.1
 
 ### Docs
