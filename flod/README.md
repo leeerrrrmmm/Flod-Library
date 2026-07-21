@@ -7,7 +7,7 @@
 **Flod** is a strict, fast, type-safe data validation and transformation engine for Dart and Flutter.
 If you know **[Zod](https://zod.dev)** (TypeScript) or Zod-inspired APIs, Flod will feel immediately familiar — with the extras that matter in production: **PII-safe errors**, **JSON hardening**, **Dio middleware**, **Flutter form bridging**, and a **compiled performance layer**.
 
-[![pub package](https://img.shields.io/badge/pub-v1.1.0-blue)](https://pub.dev)
+[![pub package](https://img.shields.io/badge/pub-v1.1.2-blue)](https://pub.dev)
 [![tests](https://img.shields.io/badge/tests-95%2B%20passing-brightgreen)]()
 [![license](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
 
@@ -79,7 +79,7 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  flod: ^1.1.0
+  flod: ^1.1.2
 ```
 
 **Entry points**
