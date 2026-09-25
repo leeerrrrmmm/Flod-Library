@@ -238,8 +238,7 @@ void inlineMessageDemo() {
     (v) => !v.endsWith('@tempmail.com'),
     message: 'Disposable emails are not allowed',
   );
-  final disposable =
-      email.safeParse('a@tempmail.com') as FlodFailure<String>;
+  final disposable = email.safeParse('a@tempmail.com') as FlodFailure<String>;
   print('Refine message: ${disposable.getMessages()}');
   print('Code still present: ${disposable.errors.single.code}');
 

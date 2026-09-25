@@ -152,12 +152,7 @@ class JsonGuard {
     Map<String, dynamic> params,
   ) {
     return FlodFailure([
-      FlodError(
-        path: path,
-        code: code,
-        params: params,
-        value: null,
-      ),
+      FlodError(path: path, code: code, params: params, value: null),
     ]);
   }
 }

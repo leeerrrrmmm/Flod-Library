@@ -459,16 +459,12 @@ void main() async {
 
   // Mutable defaults: list/map are cloned; factory preferred for nested mutables.
   final listDefault = Flod.list(schema: Flod.string()).withDefault(<String>[]);
-  final listA =
-      (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
+  final listA = (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
   listA.add("mutated");
-  final listB =
-      (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
+  final listB = (listDefault.safeParse(null) as FlodSuccess<List<String>>).data;
   print("📌 [Validator: 7.3. withDefault([]) clone safety]");
   if (listB.isEmpty && !identical(listA, listB)) {
-    print(
-      "   ✅ SUCCESS -> list defaults are cloned | a=$listA b=$listB",
-    );
+    print("   ✅ SUCCESS -> list defaults are cloned | a=$listA b=$listB");
   } else {
     print("   🚨 CRITICAL FAIL -> mutable default was shared across parses!");
   }
@@ -569,12 +565,7 @@ void main() async {
       "active": Flod.coerce.boolean(),
       "note": Flod.coerce.string().max(200),
     }).secret(),
-    validValue: {
-      "age": "22",
-      "price": "9.99",
-      "active": "yes",
-      "note": 42,
-    },
+    validValue: {"age": "22", "price": "9.99", "active": "yes", "note": 42},
     invalidValue: {
       "age": "12",
       "price": "not-a-number",

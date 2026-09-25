@@ -71,10 +71,7 @@ void main() {
       final base = Flod.object({
         'name': Flod.string(),
         'age': Flod.int(),
-        'address': Flod.object({
-          'city': Flod.string(),
-          'zip': Flod.string(),
-        }),
+        'address': Flod.object({'city': Flod.string(), 'zip': Flod.string()}),
       });
 
       final compiled = base.compile();

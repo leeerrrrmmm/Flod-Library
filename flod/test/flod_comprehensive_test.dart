@@ -23,9 +23,11 @@ Validator buildCheckoutSchema() {
           'zip': Flod.string().min(3).max(12),
         }),
       })
-      .merge(Flod.object({
-        'loyaltyPoints': Flod.int().nonNegative().defaultValue(0),
-      }));
+      .merge(
+        Flod.object({
+          'loyaltyPoints': Flod.int().nonNegative().defaultValue(0),
+        }),
+      );
 
   final paymentUnion = Flod.union([
     Flod.object({
@@ -66,27 +68,27 @@ Validator buildCheckoutSchema() {
 }
 
 Map<String, dynamic> validCheckoutPayload() => {
-      'id': 42,
-      'email': '  User@Test.COM  ',
-      'role': 'user',
-      'profile': {
-        'displayName': '  Alice  ',
-        'tags': ['a', 'b'],
-      },
-      'billing': {'country': 'UA', 'zip': '01001'},
-      'password': 'SecurePass99',
-      'confirmPassword': 'SecurePass99',
-      'payment': {
-        'method': 'card',
-        'pan': '4111111111111111',
-        'cvv': '123',
-        'exp': '12/30',
-      },
-      'items': [
-        {'sku': 'SKU-1', 'qty': 1, 'price': 9.99},
-      ],
-      'metadata': {'extra': true},
-    };
+  'id': 42,
+  'email': '  User@Test.COM  ',
+  'role': 'user',
+  'profile': {
+    'displayName': '  Alice  ',
+    'tags': ['a', 'b'],
+  },
+  'billing': {'country': 'UA', 'zip': '01001'},
+  'password': 'SecurePass99',
+  'confirmPassword': 'SecurePass99',
+  'payment': {
+    'method': 'card',
+    'pan': '4111111111111111',
+    'cvv': '123',
+    'exp': '12/30',
+  },
+  'items': [
+    {'sku': 'SKU-1', 'qty': 1, 'price': 9.99},
+  ],
+  'metadata': {'extra': true},
+};
 
 void main() {
   group('Parse API', () {
@@ -113,7 +115,10 @@ void main() {
     });
 
     test('nullable validates non-null values', () {
-      expect(Flod.string().min(3).nullable().safeParse('ab'), isA<FlodFailure>());
+      expect(
+        Flod.string().min(3).nullable().safeParse('ab'),
+        isA<FlodFailure>(),
+      );
     });
 
     test('optional accepts missing key via object', () {
@@ -139,7 +144,9 @@ void main() {
       final schema = Flod.object({
         'user': Flod.object({'age': Flod.int().min(18)}),
       });
-      final result = schema.safeParse({'user': {'age': 10}});
+      final result = schema.safeParse({
+        'user': {'age': 10},
+      });
       expect(result, isA<FlodFailure>());
       expect(
         (result as FlodFailure).errors.first.path.toReadable(),
@@ -193,21 +200,12 @@ void main() {
 
     test('discriminated union routes by literal', () {
       final schema = Flod.union([
-        Flod.object({
-          'type': Flod.literal('a'),
-          'value': Flod.string(),
-        }),
-        Flod.object({
-          'type': Flod.literal('b'),
-          'value': Flod.int(),
-        }),
+        Flod.object({'type': Flod.literal('a'), 'value': Flod.string()}),
+        Flod.object({'type': Flod.literal('b'), 'value': Flod.int()}),
       ]).discriminatedBy('type');
 
       expect(schema.safeParse({'type': 'b', 'value': 1}), isA<FlodSuccess>());
-      expect(
-        schema.safeParse({'type': 'b', 'value': 'x'}),
-        isA<FlodFailure>(),
-      );
+      expect(schema.safeParse({'type': 'b', 'value': 'x'}), isA<FlodFailure>());
     });
 
     test('discriminated union secret() works after compile', () {
@@ -400,10 +398,7 @@ void main() {
     test('email normalized by transforms', () {
       final result = compiledSchema.safeParse(validCheckoutPayload());
       expect(result, isA<FlodSuccess>());
-      expect(
-        (result as FlodSuccess).data['email'],
-        'user@test.com',
-      );
+      expect((result as FlodSuccess).data['email'], 'user@test.com');
     });
 
     test('compiled/raw parity over 50 iterations', () {

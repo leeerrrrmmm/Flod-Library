@@ -41,8 +41,7 @@ class CoerceIntValidator extends IntValidator {
   ]);
 
   @override
-  CoerceIntValidator secret() =>
-      isSecret ? this : copyWith(isSecret: true);
+  CoerceIntValidator secret() => isSecret ? this : copyWith(isSecret: true);
 
   @override
   CoerceIntValidator copyWith({
@@ -78,10 +77,7 @@ class CoerceIntValidator extends IntValidator {
         FlodError(
           path: path,
           code: FlodErrorCodes.invalidType,
-          params: {
-            'expected': 'int',
-            'actual': value.runtimeType.toString(),
-          },
+          params: {'expected': 'int', 'actual': value.runtimeType.toString()},
           value: isSecret ? null : value,
           isSecret: isSecret,
         ),
@@ -117,8 +113,7 @@ class CoerceDoubleValidator extends DoubleValidator {
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret,
       current: this,
-      create: () =>
-          CoerceDoubleValidator(rules, nextTransformers, nextSecret),
+      create: () => CoerceDoubleValidator(rules, nextTransformers, nextSecret),
     );
   }
 
@@ -173,10 +168,7 @@ class CoerceBoolValidator extends BoolValidator {
         FlodError(
           path: path,
           code: FlodErrorCodes.invalidType,
-          params: {
-            'expected': 'bool',
-            'actual': value.runtimeType.toString(),
-          },
+          params: {'expected': 'bool', 'actual': value.runtimeType.toString()},
           value: isSecret ? null : value,
           isSecret: isSecret,
         ),
@@ -195,8 +187,7 @@ class CoerceStringValidator extends StringValidator {
   ]);
 
   @override
-  CoerceStringValidator secret() =>
-      isSecret ? this : copyWith(isSecret: true);
+  CoerceStringValidator secret() => isSecret ? this : copyWith(isSecret: true);
 
   @override
   CoerceStringValidator copyWith({

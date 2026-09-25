@@ -36,17 +36,12 @@ class LazyValidator<T> extends Validator<T> implements AsyncValidator<T> {
 
   @override
   LazyValidator<T> secret() {
-    return LazyValidator<T>(
-      () => _schemaFactory().secret(),
-      isSecret: true,
-    );
+    return LazyValidator<T>(() => _schemaFactory().secret(), isSecret: true);
   }
 
   @override
-  Validator<T> strict() => LazyValidator<T>(
-    () => _schemaFactory().strict(),
-    isSecret: isSecret,
-  );
+  Validator<T> strict() =>
+      LazyValidator<T>(() => _schemaFactory().strict(), isSecret: isSecret);
 
   @override
   Validator<T> stopOnFirstError() => LazyValidator<T>(

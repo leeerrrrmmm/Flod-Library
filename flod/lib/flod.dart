@@ -95,13 +95,9 @@ abstract final class Flod {
     String? code,
     String? message,
     Map<String, dynamic>? params,
-  }) => ObjectValidator(schema).refine(
-    predicate,
-    path: path,
-    code: code,
-    message: message,
-    params: params,
-  );
+  }) => ObjectValidator(
+    schema,
+  ).refine(predicate, path: path, code: code, message: message, params: params);
 
   /// Union-type validator for polymorphic structures
   static UnionValidator union(List<Validator> schemas) =>

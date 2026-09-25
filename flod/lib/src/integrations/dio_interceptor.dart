@@ -9,11 +9,7 @@ import 'package:flod/src/integrations/json_guard.dart';
 /// On success, replaces [Response.data] with the typed, validated output.
 /// On failure, rejects with [DioException] wrapping [ValidationException].
 class FlodValidateInterceptor extends Interceptor {
-  FlodValidateInterceptor({
-    required this.schema,
-    this.guard,
-    this.extractData,
-  });
+  FlodValidateInterceptor({required this.schema, this.guard, this.extractData});
 
   final Validator schema;
   final JsonGuard? guard;
@@ -33,16 +29,9 @@ class FlodValidateInterceptor extends Interceptor {
   }
 
   @override
-  void onResponse(
-    Response response,
-    ResponseInterceptorHandler handler,
-  ) {
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
     final raw = extractData?.call(response) ?? response.data;
-    final result = validatePayload(
-      raw: raw,
-      schema: schema,
-      guard: guard,
-    );
+    final result = validatePayload(raw: raw, schema: schema, guard: guard);
 
     switch (result) {
       case FlodSuccess(data: final data):

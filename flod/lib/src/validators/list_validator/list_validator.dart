@@ -57,7 +57,8 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
     final nextTransformers = transformers ?? this.transformers;
     final nextSecret = isSecret ?? this.isSecret;
     return ChainUtils.identityCopy(
-      unchanged: identical(nextSchema, this.schema) &&
+      unchanged:
+          identical(nextSchema, this.schema) &&
           nextMin == this.minItemsLength &&
           nextMax == this.maxItemsLength &&
           nextMinMsg == this.minMessage &&
@@ -202,7 +203,9 @@ class ListValidator<T> extends Validator<List<T>> with Transformable<List<T>> {
 
     // 4. Per-element validation via nested schema
     // 12.2 — hoist secret schema once per validation
-    final effectiveSchema = isSecret && schema != null ? schema!.secret() : schema;
+    final effectiveSchema = isSecret && schema != null
+        ? schema!.secret()
+        : schema;
 
     for (int i = 0; i < len; i++) {
       final nextPath = path.append(i);

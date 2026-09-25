@@ -34,7 +34,8 @@ class IntValidator extends Validator<int> with Transformable<int> {
     final nextTransformers = transformers ?? this.transformers;
     final nextSecret = isSecret ?? this.isSecret;
     return ChainUtils.identityCopy(
-      unchanged: identical(nextRules, this.rules) &&
+      unchanged:
+          identical(nextRules, this.rules) &&
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret,
       current: this,

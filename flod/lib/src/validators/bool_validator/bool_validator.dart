@@ -7,7 +7,8 @@ class BoolValidator extends Validator<bool> {
   bool get isPure => !isSecret;
 
   @override
-  BoolValidator secret() => isSecret ? this : const BoolValidator(isSecret: true);
+  BoolValidator secret() =>
+      isSecret ? this : const BoolValidator(isSecret: true);
 
   @override
   ParseResult<bool> validate(

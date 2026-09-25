@@ -22,7 +22,10 @@ class DoubleValidator extends BaseNumberValidator<double>
   DoubleValidator secret() => isSecret ? this : copyWith(rules, isSecret: true);
 
   DoubleValidator _copyWithTransform(Transformer<double> transform) {
-    return copyWith(rules, transformers: ChainUtils.append(transformers, transform));
+    return copyWith(
+      rules,
+      transformers: ChainUtils.append(transformers, transform),
+    );
   }
 
   // =========================================================================
@@ -45,7 +48,8 @@ class DoubleValidator extends BaseNumberValidator<double>
     final nextTransformers = transformers ?? this.transformers;
     final nextSecret = isSecret ?? this.isSecret;
     return ChainUtils.identityCopy(
-      unchanged: identical(rules, this.rules) &&
+      unchanged:
+          identical(rules, this.rules) &&
           identical(nextTransformers, this.transformers) &&
           nextSecret == this.isSecret,
       current: this,
@@ -122,9 +126,7 @@ class DoubleValidator extends BaseNumberValidator<double>
           path: path,
           code: FlodErrorCodes.invalidNumber,
           params: {'value': transformed},
-          value: isSecret
-              ? null
-              : transformed, // Current state goes to the log
+          value: isSecret ? null : transformed, // Current state goes to the log
           isSecret: isSecret,
         ),
       ]);

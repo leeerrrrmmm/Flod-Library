@@ -1,3 +1,9 @@
+## 1.1.3
+
+### Changed
+
+- Bump dependencies to their current versions: `dio` ^5.11.1, `lints` ^6.1.0, `test` ^1.32.0.
+
 ## 1.1.2
 
 ### Pub

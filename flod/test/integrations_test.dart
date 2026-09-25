@@ -42,7 +42,9 @@ void main() {
     test('enforces max depth', () {
       const shallow = JsonGuard(options: JsonGuardOptions(maxDepth: 2));
       final result = shallow.guard({
-        'a': {'b': {'c': 1}},
+        'a': {
+          'b': {'c': 1},
+        },
       }, userSchema);
       expect(result, isA<FlodFailure>());
       expect(
@@ -70,15 +72,16 @@ void main() {
   });
 
   group('FlodFormAdapter', () {
-    final schema = Flod.object({
-      'email': Flod.string().email(),
-      'password': Flod.string().min(8),
-      'confirmPassword': Flod.string(),
-    }).refine(
-      (d) => d['password'] == d['confirmPassword'],
-      code: 'passwords_match',
-      path: ['confirmPassword'],
-    );
+    final schema =
+        Flod.object({
+          'email': Flod.string().email(),
+          'password': Flod.string().min(8),
+          'confirmPassword': Flod.string(),
+        }).refine(
+          (d) => d['password'] == d['confirmPassword'],
+          code: 'passwords_match',
+          path: ['confirmPassword'],
+        );
 
     final adapter = FlodFormAdapter(schema);
 
@@ -110,7 +113,10 @@ void main() {
     });
 
     test('validateGrouped collects multiple messages per field', () {
-      final grouped = adapter.validateGrouped({'email': 'bad', 'password': 'x'});
+      final grouped = adapter.validateGrouped({
+        'email': 'bad',
+        'password': 'x',
+      });
       expect(grouped['email'], isNotNull);
       expect(grouped['password'], isNotNull);
     });

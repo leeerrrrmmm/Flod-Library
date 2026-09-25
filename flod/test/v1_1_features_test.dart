@@ -72,12 +72,8 @@ void main() {
         (v) => !v.endsWith('@tempmail.com'),
         message: 'Disposable emails are not allowed',
       );
-      final failure =
-          schema.safeParse('a@tempmail.com') as FlodFailure<String>;
-      expect(
-        failure.getMessages().single,
-        'Disposable emails are not allowed',
-      );
+      final failure = schema.safeParse('a@tempmail.com') as FlodFailure<String>;
+      expect(failure.getMessages().single, 'Disposable emails are not allowed');
     });
 
     test('without message, default locale still applies', () {
@@ -98,14 +94,8 @@ void main() {
     });
 
     test('coerce.int from num and bool', () {
-      expect(
-        (Flod.coerce.int().safeParse(3.9) as FlodSuccess<int>).data,
-        3,
-      );
-      expect(
-        (Flod.coerce.int().safeParse(true) as FlodSuccess<int>).data,
-        1,
-      );
+      expect((Flod.coerce.int().safeParse(3.9) as FlodSuccess<int>).data, 3);
+      expect((Flod.coerce.int().safeParse(true) as FlodSuccess<int>).data, 1);
     });
 
     test('coerce.double from String', () {
@@ -128,10 +118,7 @@ void main() {
 
     test('coerce.string from numbers', () {
       final schema = Flod.coerce.string().min(2);
-      expect(
-        (schema.safeParse(42) as FlodSuccess<String>).data,
-        '42',
-      );
+      expect((schema.safeParse(42) as FlodSuccess<String>).data, '42');
     });
 
     test('form-shaped object with coerce fields', () {
@@ -182,8 +169,9 @@ void main() {
         ],
       });
       expect(bad, isA<FlodFailure>());
-      final keys =
-          (bad as FlodFailure<Map<String, dynamic>>).getFieldsMap().keys;
+      final keys = (bad as FlodFailure<Map<String, dynamic>>)
+          .getFieldsMap()
+          .keys;
       expect(keys.any((k) => k.contains('children[0].name')), isTrue);
     });
 

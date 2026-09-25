@@ -6,14 +6,14 @@ void main() {
     final base = Flod.object({
       'name': Flod.string(),
       'age': Flod.int(),
-      'address': Flod.object({
-        'city': Flod.string(),
-        'zip': Flod.string(),
-      }),
+      'address': Flod.object({'city': Flod.string(), 'zip': Flod.string()}),
     });
 
     test('extend adds and overrides keys', () {
-      final extended = base.extend({'age': Flod.string(), 'email': Flod.string().email()});
+      final extended = base.extend({
+        'age': Flod.string(),
+        'email': Flod.string().email(),
+      });
 
       final result = extended.safeParse({
         'name': 'Alice',
@@ -44,7 +44,9 @@ void main() {
 
       expect(partial.safeParse({}), isA<FlodSuccess>());
       expect(
-        partial.safeParse({'address': {'city': 'Odesa'}}),
+        partial.safeParse({
+          'address': {'city': 'Odesa'},
+        }),
         isA<FlodSuccess>(),
       );
     });
@@ -52,9 +54,7 @@ void main() {
     test('partial deep makes nested fields optional', () {
       final partial = base.partial(deep: true);
 
-      final result = partial.safeParse({
-        'address': {},
-      });
+      final result = partial.safeParse({'address': {}});
 
       expect(result, isA<FlodSuccess>());
     });
@@ -62,14 +62,8 @@ void main() {
     test('pick keeps only selected keys', () {
       final picked = base.pick(['name']);
 
-      expect(
-        picked.safeParse({'name': 'Eve'}),
-        isA<FlodSuccess>(),
-      );
-      expect(
-        picked.safeParse({'name': 'Eve', 'age': 20}),
-        isA<FlodSuccess>(),
-      );
+      expect(picked.safeParse({'name': 'Eve'}), isA<FlodSuccess>());
+      expect(picked.safeParse({'name': 'Eve', 'age': 20}), isA<FlodSuccess>());
     });
 
     test('omit removes selected keys', () {
@@ -149,23 +143,21 @@ void main() {
 
   group('SuperRefine & async refine (21.3)', () {
     test('superRefine adds multiple targeted issues', () {
-      final schema = Flod.object({
-        'password': Flod.string().min(8),
-        'confirmPassword': Flod.string(),
-      }).superRefine((val, ctx) {
-        if (val['password'] != val['confirmPassword']) {
-          ctx.addIssue(
-            path: ['confirmPassword'],
-            code: 'password_mismatch',
-          );
-        }
-        if (val['password'] == 'weakpass') {
-          ctx.addIssue(
-            path: ['password'],
-            code: 'password_too_common',
-          );
-        }
-      });
+      final schema =
+          Flod.object({
+            'password': Flod.string().min(8),
+            'confirmPassword': Flod.string(),
+          }).superRefine((val, ctx) {
+            if (val['password'] != val['confirmPassword']) {
+              ctx.addIssue(
+                path: ['confirmPassword'],
+                code: 'password_mismatch',
+              );
+            }
+            if (val['password'] == 'weakpass') {
+              ctx.addIssue(path: ['password'], code: 'password_too_common');
+            }
+          });
 
       final result = schema.safeParse({
         'password': 'weakpass',
@@ -186,9 +178,9 @@ void main() {
     });
 
     test('refineAsync validates asynchronously', () async {
-      final schema = Flod.object({
-        'token': Flod.string(),
-      }).refineAsync((val) async {
+      final schema = Flod.object({'token': Flod.string()}).refineAsync((
+        val,
+      ) async {
         await Future<void>.delayed(Duration.zero);
         return val['token'] == 'valid';
       }, code: 'invalid_token');
@@ -206,15 +198,13 @@ void main() {
     });
 
     test('superRefineAsync validates asynchronously', () async {
-      final schema = Flod.object({
-        'a': Flod.int(),
-        'b': Flod.int(),
-      }).superRefineAsync((val, ctx) async {
-        await Future<void>.delayed(Duration.zero);
-        if ((val['a'] as int) + (val['b'] as int) > 10) {
-          ctx.addIssue(path: ['b'], code: 'sum_too_large');
-        }
-      });
+      final schema = Flod.object({'a': Flod.int(), 'b': Flod.int()})
+          .superRefineAsync((val, ctx) async {
+            await Future<void>.delayed(Duration.zero);
+            if ((val['a'] as int) + (val['b'] as int) > 10) {
+              ctx.addIssue(path: ['b'], code: 'sum_too_large');
+            }
+          });
 
       final fail = await schema.safeParseAsync({'a': 6, 'b': 5});
       expect(fail, isA<FlodFailure>());
